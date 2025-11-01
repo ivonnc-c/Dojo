@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- v3.26.2 Refactor: 補回遺失的 formatTimestamp -->
-  <title>Dojo 紀錄系統 (v3.26.2 錯誤修正)</title>
+  <!-- v3.24 升級: 獨立抽籤工具箱 -->
+  <title>Dojo 紀錄系統 (v3.24 抽籤工具箱)</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b82f6">
 
-  <!-- v3.25 新增: 集中 Firebase 設定 (仿照作業追蹤程式) -->
+  <!-- v-3.25 新增: 集中 Firebase 設定 (仿照作業追蹤程式) -->
   <script>
     // =======================================================================
     // ⭐️⭐️⭐️【 Firebase 設定區塊 】⭐️⭐️⭐️
@@ -203,8 +203,7 @@
       padding: 0 0.5rem 0.25rem;
       border-bottom: 1px solid theme('colors.gray.200');
     }
-
-    /* v3.19.1 班級按鈕: 移除 active/inactive, 改由 HTML 控制 */
+    /* v3.19.1 班級按鈕 */
     .class-button {
       padding: 0.5rem 1rem; /* 8px 16px */
       border-radius: 0.5rem; /* 8px */
@@ -216,7 +215,6 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
-
     /* v3.20 個人總覽列表 */
     .log-list-item {
       display: grid;
@@ -236,6 +234,29 @@
       font-weight: 600;
       border-bottom: 1px solid theme('colors.gray.200');
       padding-bottom: 0.25rem;
+    }
+    
+    /* v3.24 抽籤工具箱: 學生格子 */
+    .draw-grid {
+      border: 1px solid theme('colors.gray.300');
+      background-color: theme('colors.white');
+      padding: 0.5rem;
+      border-radius: 0.375rem; /* 6px */
+      text-align: center;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .draw-grid.drawn { /* 已抽過 (不重複模式) */
+      background-color: theme('colors.gray.300');
+      color: theme('colors.gray.500');
+      border-color: theme('colors.gray.400');
+    }
+    .draw-grid.just-drawn { /* 本次抽中 */
+      background-color: theme('colors.blue.500');
+      color: theme('colors.white');
+      border-color: theme('colors.blue.600');
+      transform: scale(1.05);
+      font-weight: 700;
     }
   </style>
 </head>
@@ -310,7 +331,7 @@
             <p class="mt-4 text-sm">請確認您的 Firebase 設定與 Firestore 規則 (Rules) 是否正確。</p>
         </div>
     </div>
-    <!-- v3.19 修改提示 (如果沒有班級, 應直接顯示 "管理班級" 彈窗按鈕) -->
+    <!-- v-3.19 修改提示 (如果沒有班級, 應直接顯示 "管理班級" 彈窗按鈕) -->
     <div v-else-if="classes.length === 0" class="flex-grow flex items-center justify-center">
         <p class="text-lg text-gray-600">目前沒有任何班級，請點選右上角「⚙️ 管理班級」來新增。</p>
     </div>
@@ -327,6 +348,7 @@
        </div>
       <!-- v-3.20 改用 flex-wrap -->
       <div class="flex flex-wrap justify-center gap-3 md:gap-4">
+            <!-- v3.26.3 修正: 調整學生卡片寬度 -->
             <div v-for="student in students" :key="student.id"
                  @click="toggleStudent(student.id)"
                  class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[120px] max-w-[160px]"
@@ -361,8 +383,8 @@
                 :class="[(selectedStudents.size !== 1 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700']">
           個人總覽
         </button>
-        <!-- v3.23 修改: 觸發 randomSelect 函數 (開啟抽籤 modal) -->
-        <button @click="randomSelect" :disabled="students.length === 0 || isAnyLoading"
+        <!-- v3.27 修改: 觸發 openModal('randomSelect') -->
+        <button @click="openModal('randomSelect')" :disabled="students.length === 0 || isAnyLoading"
                 class="bg-purple-500 text-white py-3 px-4 rounded-lg font-bold text-lg transition-colors flex-1 md:flex-none"
                 :class="[(students.length === 0 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600']">
           隨機抽籤
@@ -372,7 +394,8 @@
     
     <!-- ==== 彈出視窗 (Modal) 結構 ==== -->
     <transition name="modal">
-      <div v-if="modal.isOpen"
+      <!-- v3.27 調整: 抽籤 modal 不使用此 transition -->
+      <div v-if="modal.isOpen && modal.view !== 'randomSelect'"
            class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
            @click.self="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null ? null : closeModal()">
         <div class="modal-transition bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
@@ -865,42 +888,137 @@
 
             </div>
 
-            <!-- v3.23 新增: 隨機抽籤設定 -->
-            <div v-if="modal.view === 'randomSelectSettings'">
-              <div class="space-y-4">
-                <label for="randomCount" class="block text-sm font-medium text-gray-700">要抽出幾位學生？ (最多 {{ students.length }} 位)</label>
-                <input type="number" id="randomCount" v-model.number="randomSelectCount"
-                       min="1" :max="students.length"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                <button @click="executeRandomSelect"
-                        :disabled="randomSelectCount <= 0 || randomSelectCount > students.length"
-                        class="w-full bg-purple-500 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                        :class="(randomSelectCount <= 0 || randomSelectCount > students.length) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600'">
-                  開始抽籤
-                </button>
+            <!-- v3.24 升級: 獨立隨機抽籤工具箱 -->
+            <div v-if="modal.view === 'randomSelect'">
+              <!-- 上方: 控制區 -->
+              <div class="p-4 border-b space-y-3 bg-gray-50">
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-medium text-gray-700">快速抽籤:</span>
+                  <button @click="executeRandomDraw(1)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">1人</button>
+                  <button @click="executeRandomDraw(2)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">2人</button>
+                  <button @click="executeRandomDraw(3)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">3人</button>
+                  <button @click="executeRandomDraw(4)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">4人</button>
+                  <button @click="executeRandomDraw(5)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">5人</button>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-medium text-gray-700">自訂人數:</span>
+                  <input type="number" v-model.number="randomSelectCount" min="1" :max="availableStudentCount"
+                         class="w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm sm:text-sm">
+                  <button @click="executeRandomDraw(randomSelectCount)" 
+                          :disabled="isAnyLoading || randomSelectCount <= 0 || randomSelectCount > availableStudentCount"
+                          class="bg-purple-500 text-white px-3 py-1 rounded-md text-sm font-medium"
+                          :class="(randomSelectCount <= 0 || randomSelectCount > availableStudentCount) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600'">
+                    抽 {{ randomSelectCount }} 人
+                  </button>
+                  <span v-if="!isRepeatingDraw" class="text-xs text-gray-500">(剩餘 {{ availableStudentCount }} 人)</span>
+                </div>
+                 <div class="flex items-center justify-between">
+                  <button @click="toggleRepeatDraw" 
+                          :disabled="isAnyLoading"
+                          class="px-3 py-1 rounded-md text-sm font-medium border"
+                          :class="isRepeatingDraw ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-blue-100 border-blue-300 text-blue-800'">
+                    {{ isRepeatingDraw ? '模式: 重複抽籤' : '模式: 不重複抽籤' }}
+                  </button>
+                  <button @click="clearDrawState" 
+                          :disabled="isAnyLoading"
+                          class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-600">
+                    清除狀態
+                  </button>
+                </div>
               </div>
+
+              <!-- 中間: 學生格子區 -->
+              <div class="p-4 grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                <div v-for="student in students" :key="student.id"
+                     class="draw-grid"
+                     :class="{
+                       'just-drawn': justDrawnStudentsSet.has(student.id),
+                       'drawn': !isRepeatingDraw && drawnStudentsSet.has(student.id) && !justDrawnStudentsSet.has(student.id)
+                     }">
+                  {{ student.name.split(' ')[0] }} <!-- 只顯示座號 -->
+                </div>
+              </div>
+
+              <!-- 下方: 紀錄區 (v3.24 移除) -->
             </div>
             
           </main>
           
-          <!-- v3.23 修改: 抽籤視窗使用自訂頁尾 (關閉按鈕) -->
-          <footer v-if="modal.view !== 'scoreStudent' && modal.view !== 'randomSelectSettings'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
+          <!-- v3.24 修改: 抽籤視窗使用獨立頁尾 -->
+          <footer v-if="modal.view !== 'scoreStudent' && modal.view !== 'randomSelect'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
             <button @click="closeModal" :disabled="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null" 
                     class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors"
                     :class="(isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'"> 
               關閉
             </button>
           </footer>
-          <!-- v3.23 抽籤視窗的獨立頁尾 (只有關閉) -->
-           <footer v-if="modal.view === 'randomSelectSettings'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
+          <!-- v3.24 抽籤視窗的獨立頁尾 (只有關閉) -->
+           <footer v-if="modal.view === 'randomSelect'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
             <button @click="closeModal" 
                     class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors hover:bg-gray-300">
-              取消
+              關閉
             </button>
           </footer>
         </div>
       </div>
     </transition>
+
+    <!-- v3.27 新增: 全螢幕隨機抽籤介面 -->
+    <transition name="modal">
+      <div v-if="modal.isOpen && modal.view === 'randomSelect'" class="random-select-modal">
+        <!-- 控制列 -->
+        <header class="random-select-controls">
+          <div class="container mx-auto max-w-6xl">
+            <!-- 標題與關閉 -->
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl md:text-2xl font-bold text-gray-800">{{ modal.title }}</h2>
+              <button @click="closeModal" class="text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <!-- 功能按鈕 -->
+            <div class="flex flex-wrap gap-2">
+              <!-- 數字按鈕 -->
+              <button @click="drawStudents(1)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 1 人</button>
+              <button @click="drawStudents(2)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 2 人</button>
+              <button @click="drawStudents(3)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 3 人</button>
+              <button @click="drawStudents(4)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 4 人</button>
+              <button @click="drawStudents(5)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 5 人</button>
+              
+              <!-- 自訂人數 -->
+              <div class="flex items-center space-x-1 border border-gray-300 rounded-md pl-2">
+                <span class="text-sm font-medium text-gray-500">[...]</span>
+                <input type="number" v-model.number="customRandomCount" min="1" :max="students.length" class="w-16 p-2 border-l border-gray-300 focus:outline-none">
+                <button @click="drawStudents(customRandomCount)" class="control-button bg-purple-500 text-white border-purple-600 hover:bg-purple-600 rounded-l-none">抽 {{ customRandomCount }} 人</button>
+              </div>
+
+              <!-- 模式切換 -->
+              <button @click="toggleRandomMode" class="control-button"
+                      :class="randomMode === 'no-repeat' ? 'bg-yellow-500 text-white border-yellow-600' : 'bg-gray-100'">
+                {{ randomMode === 'no-repeat' ? '模式: 不重複' : '模式: 可重複' }}
+              </button>
+
+              <!-- 清除 -->
+              <button @click="clearDrawnHistory" class="control-button bg-red-500 text-white border-red-600 hover:bg-red-600">
+                清除紀錄
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- 座號格 -->
+        <main class="random-select-grid">
+          <div v-for="student in students" :key="student.id"
+               :class="getSeatCellClass(student.id)">
+            {{ getSeatNumberOnly(student.name) }}
+          </div>
+        </main>
+      </div>
+    </transition>
+
 
     <!-- v3.10.8 升級: 共用確認對話框 -->
     <div v-if="confirmDialog.isOpen" class="confirm-dialog-backdrop">
@@ -1011,7 +1129,7 @@
         const scoringItemsRaw = Vue.ref([]); 
         
         const currentClassId = Vue.ref(null);
-        const selectedStudents = Vue.reactive(new Set());
+        const selectedStudents = Vue.reactive(new Set()); // 主畫面的選取 (for 評分)
         const modal = Vue.reactive({ isOpen: false, view: '', title: '' });
         
         // 評分
@@ -1032,8 +1150,12 @@
         const inlineEditClassId = Vue.ref(null);
         const inlineEditClassName = Vue.ref('');
 
-        // 隨機抽籤 (v3.23)
+        // 隨機抽籤 (v3.24 重構)
         const randomSelectCount = Vue.ref(1);
+        const isRepeatingDraw = Vue.ref(false); // v3.24
+        const drawnStudentsSet = Vue.reactive(new Set()); // v3.24 已抽過 (灰色)
+        const justDrawnStudentsSet = Vue.reactive(new Set()); // v3.24 本次抽中 (藍色)
+
 
         // 共用確認對話框
         const confirmDialog = Vue.reactive({ 
@@ -1116,13 +1238,13 @@
             }
           }
           // v3.21 依照時間戳排序 (新到舊)
-          const sortByTimestamp = (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
-          academic.sort(sortByTimestamp);
-          behavior.sort(sortByTimestamp);
-          
-          return { academic, behavior };
+        // v3.24: 抽籤可用人數
+        const availableStudentCount = Vue.computed(() => {
+          if (isRepeatingDraw.value) {
+            return students.value.length;
+          }
+          return students.value.filter(s => !drawnStudentsSet.has(s.id)).length;
         });
-
 
         // === Methods ===
         
@@ -1212,7 +1334,7 @@
            else { students.value.forEach(s => selectedStudents.add(s.id)); }
         };
 
-        // v3.21 調整: 開啟個人總覽時觸發載入
+        // v3.27 調整: 抽籤 modal
         const openModal = (viewName) => { 
            modal.view = viewName;
            modal.isOpen = true;
@@ -1235,11 +1357,12 @@
               modal.title = `查看「${viewingStudent.value?.name || 'N/A'}」的個人紀錄`; 
               loadStudentLog(studentId); 
               break;
-            case 'randomSelectSettings': // v3.23
-              modal.title = '隨機抽籤';
+            case 'randomSelect': // v3.24
+              modal.title = '隨機抽籤 / 分組工具';
+              justDrawnStudentsSet.clear(); // 每次打開都清除上次的 "藍色"
               // 確保數字不大於學生總數
-              if (randomSelectCount.value > students.value.length) {
-                randomSelectCount.value = students.value.length;
+              if (randomSelectCount.value > availableStudentCount.value) {
+                randomSelectCount.value = availableStudentCount.value > 0 ? availableStudentCount.value : 1;
               }
               if (randomSelectCount.value < 1) {
                 randomSelectCount.value = 1;
@@ -1249,7 +1372,7 @@
           }
         };
         
-        // v3.23 更新: 重置抽籤狀態
+        // v3.24 更新: 重置抽籤狀態
         const closeModal = () => { 
            modal.isOpen = false;
            // 重置狀態
@@ -1270,7 +1393,11 @@
            Object.assign(newItemData, { reason: '', value: 1, category: 'academic' }); 
            newClassName.value = ''; 
            classError.value = ''; 
-           randomSelectCount.value = 1; // v3.23
+           // v3.24 重置抽籤工具狀態
+           randomSelectCount.value = 1;
+           isRepeatingDraw.value = false;
+           drawnStudentsSet.clear();
+           justDrawnStudentsSet.clear();
         };
 
         // 【v3.10.9 修正】評分確認
@@ -1457,36 +1584,67 @@
           }
         };
 
-        // v3.23 實作: 隨機抽籤
+        // v3.24 重構: 隨機抽籤
         const randomSelect = () => {
-          log(`[ACTION] 開啟隨機抽籤設定...`);
-          openModal('randomSelectSettings');
+          log(`[ACTION] 開啟隨機抽籤工具...`);
+          openModal('randomSelect');
         };
 
-        const executeRandomSelect = () => {
-          log(`[ACTION] 執行抽籤: ${randomSelectCount.value} 人`);
-          const count = Number(randomSelectCount.value);
-          if (count <= 0 || count > students.length) {
-            log(`[WARN] 抽籤人數不合法: ${count}`);
+        const executeRandomDraw = (count) => {
+          log(`[ACTION] 執行抽籤: ${count} 人 (模式: ${isRepeatingDraw.value ? '重複' : '不重複'})`);
+          
+          if (count <= 0) return;
+          if (!isRepeatingDraw.value && count > availableStudentCount.value) {
+            alert(`剩餘人數不足 ${count} 人！`);
             return;
           }
 
-          // 清空目前選取
-          selectedStudents.clear();
+          // 1. 清除上次抽中的 (藍色)
+          justDrawnStudentsSet.clear();
           
-          // 隨機排序
-          const shuffled = [...students.value].sort(() => 0.5 - Math.random());
+          // 2. 取得可抽籤名單
+          let availableStudents = [];
+          if (isRepeatingDraw.value) {
+            availableStudents = [...students.value];
+          } else {
+            availableStudents = students.value.filter(s => !drawnStudentsSet.has(s.id));
+          }
+
+          // 3. 隨機排序
+          const shuffled = availableStudents.sort(() => 0.5 - Math.random());
           
-          // 選出 N 人
+          // 4. 選出 N 人
           const winners = shuffled.slice(0, count);
           
-          // 加入選取 (高亮)
+          // 5. 加入高亮 (藍色), 並更新已抽中 (灰色)
           winners.forEach(student => {
-            selectedStudents.add(student.id);
+            justDrawnStudentsSet.add(student.id);
+            if (!isRepeatingDraw.value) {
+              drawnStudentsSet.add(student.id);
+            }
             log(`[DEBUG] 抽中: ${student.name}`);
           });
 
-          closeModal();
+          // 6. 重設輸入框 (如果人數抽完了)
+          if (!isRepeatingDraw.value && availableStudentCount.value === 0) {
+            randomSelectCount.value = 0;
+          } else if (randomSelectCount.value > availableStudentCount.value) {
+            randomSelectCount.value = availableStudentCount.value;
+          }
+        };
+
+        const toggleRepeatDraw = () => {
+          isRepeatingDraw.value = !isRepeatingDraw.value;
+          log(`[ACTION] 切換抽籤模式為: ${isRepeatingDraw.value ? '重複' : '不重複'}`);
+          // 切換模式時, 清除所有狀態
+          clearDrawState();
+        };
+        
+        const clearDrawState = () => {
+          log(`[ACTION] 清除抽籤狀態`);
+          drawnStudentsSet.clear();
+          justDrawnStudentsSet.clear();
+          randomSelectCount.value = 1;
         };
 
         // === v3.10.2 修正: 移至上方 ===
@@ -2081,8 +2239,8 @@
           newItemData, categorizedItems, inlineEditItemId, inlineEditItemData,
           // 班級管理
           newClassName, inlineEditClassId, inlineEditClassName,
-          // 抽籤 (v3.23)
-          randomSelectCount,
+          // 抽籤 (v3.24)
+          randomSelectCount, isRepeatingDraw, drawnStudentsSet, justDrawnStudentsSet, availableStudentCount,
           // 共用確認
           confirmDialog, 
           
@@ -2107,7 +2265,7 @@
           cancelConfirm, executeConfirm, 
           // 其他
           exportCSV, 
-          randomSelect, executeRandomSelect // v3.23
+          randomSelect, executeRandomDraw, toggleRepeatDraw, clearDrawState // v3.24
         };
       }
     });
@@ -2130,4 +2288,5 @@
   </script>
 </body>
 </html>
+
 
