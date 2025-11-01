@@ -329,7 +329,7 @@
       <div class="flex flex-wrap justify-center gap-3 md:gap-4">
             <div v-for="student in students" :key="student.id"
                  @click="toggleStudent(student.id)"
-                 class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[150px] max-w-[200px]"
+                 class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[120px] max-w-[160px]"
                  :class="{ 'selected': selectedStudents.has(student.id) }">
 
               <div class="student-name-row px-3 py-3 md:px-4 md:py-4 bg-gray-50 border-b border-gray-200">
@@ -2130,3 +2130,4 @@
   </script>
 </body>
 </html>
+
