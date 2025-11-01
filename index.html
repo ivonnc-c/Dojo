@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- v3.25.3 Refactor: 修正 PWA 離線錯誤 -->
-  <title>Dojo 紀錄系統 (v3.25.3 PWA 修正)</title>
+  <!-- v3.26 PWA 正式啟用 -->
+  <title>Dojo 紀錄系統 (v3.26 PWA)</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b82f6">
 
@@ -2097,11 +2097,11 @@
 
     app.mount('#app');
 
-    // v3.25.3 修正: 暫時註解 Service Worker 註冊, 避免在 blob 環境下報錯
-    /*
+    // v3.26 修正: 正式上線, 啟用 Service Worker 註冊
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
+        // v3.26 修正: 確保路徑是相對於根目錄的 ./
+        navigator.serviceWorker.register('./service-worker.js') 
           .then(registration => {
             console.log('[ServiceWorker] 註冊成功, 範圍: ', registration.scope);
           })
@@ -2110,7 +2110,6 @@
           });
       });
     }
-    */
   </script>
 </body>
 </html>
