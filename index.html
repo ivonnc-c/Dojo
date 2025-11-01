@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- v3.25.3 Refactor: 修正 PWA 離線錯誤 -->
+  <title>Dojo 紀錄系統 (v3.25.3 PWA 修正)</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6">
+
+  <!-- v3.25 新增: 集中 Firebase 設定 (仿照作業追蹤程式) -->
+  <script>
+    // =======================================================================
+    // ⭐️⭐️⭐️【 Firebase 設定區塊 】⭐️⭐️⭐️
+    // =======================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDRqDR9RjDNhCtUZOiXzhtRAK5ixxN-6vU",
+      authDomain: "dojo-system-4e5d3.firebaseapp.com",
+      projectId: "dojo-system-4e5d3",
+      storageBucket: "dojo-system-4e5d3.firebasestorage.app",
+      messagingSenderId: "1051938683145",
+      appId: "1:1051938683145:web:ab1843405b02cba57afbd8"
+    };
+    // =======================================================================
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background-color: #f4f7f6;
+    }
+    main {
+      flex-grow: 1;
+    }
+    /* 選中樣式 */
+    .student-grid.selected {
+      box-shadow: 0 0 0 4px #3b82f6;
+      transform: scale(1.03);
+      background-color: #bfdbfe;
+      border-color: #3b82f6;
+    }
+    .student-grid.selected .student-name-row {
+        background-color: #3b82f6;
+        border-color: #3b82f6;
+    }
+    .student-grid.selected .student-name-text {
+        color: white;
+        font-weight: bold;
+    }
+
+    /* Modal 樣式 */
+    .modal-backdrop {
+      background-color: rgba(0, 0, 0, 0.6);
+      transition: opacity 0.3s ease;
+    }
+    .modal-enter-from, .modal-leave-to {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    .modal-enter-to, .modal-leave-from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .modal-transition {
+      transition: all 0.3s ease;
+    }
+    [v-cloak] { display: none; }
+    .button-loading {
+      position: relative;
+      color: transparent !important;
+    }
+    .button-loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 1.5em;
+      height: 1.5em;
+      margin-top: -0.75em;
+      margin-left: -0.75em;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* v3.14 評分項目按鈕樣式 (需求2: 再加深邊框) */
+    .score-item-button {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      text-align: left;
+      padding: 0.5rem; /* v3.12 需求4: 縮減高度 */
+      border-radius: 0.5rem;
+      border: 1px solid; /* 邊框統一定義 */
+      transition: all 0.2s ease-in-out;
+      box-shadow: theme('boxShadow.sm'); /* v3.12 需求2: 增加陰影 */
+    }
+    .score-item-button.positive {
+      background-color: theme('colors.green.50');
+      border-color: theme('colors.green.400'); /* v3.14 需求2: 再加深 (原 300) */
+    }
+    .score-item-button.positive:hover:not(:disabled) {
+      background-color: theme('colors.green.100');
+      border-color: theme('colors.green.600'); /* v3.14 需求2: 再加深 (原 500) */
+      box-shadow: theme('boxShadow.md');
+      transform: translateY(-1px);
+    }
+    .score-item-button.negative {
+      background-color: theme('colors.red.50');
+      border-color: theme('colors.red.400'); /* v3.14 需求2: 再加深 (原 300) */
+    }
+     .score-item-button.negative:hover:not(:disabled) {
+      background-color: theme('colors.red.100');
+      border-color: theme('colors.red.600'); /* v3.14 需求2: 再加深 (原 500) */
+      box-shadow: theme('boxShadow.md');
+      transform: translateY(-1px);
+    }
+     .score-item-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+     }
+
+     /* v3.17 移除自訂頁籤 CSS, 完全改用 Tailwind */
+
+     /* v3.14 需求4: 再壓縮項目列高 */
+     .score-item-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem; /* space-y-1 (原 0.375rem) */
+     }
+
+
+     /* 確認對話框樣式 */
+    .confirm-dialog-backdrop {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 60; /* 比 Modal 高一層 */
+    }
+    .confirm-dialog {
+        background-color: white;
+        padding: 1.5rem; /* 24px */
+        border-radius: 0.75rem; /* 12px */
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+    }
+    /* v3.8 新增: 評分項管理介面 */
+    .item-manage-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.75rem; /* 12px */
+      align-items: center;
+    }
+
+    /* v3.10.7 修正: 統一欄位寬度 */
+    .item-manage-layout {
+      display: grid;
+      /* 事由(1fr) | 分數(50px) | 類別(50px) | 調整(80px) | 編輯(50px) | 刪除(50px) */
+      grid-template-columns: 1fr 50px 50px 80px 50px 50px;
+      gap: 0.5rem; /* 8px */
+      align-items: center;
+      text-align: left; /* v3.10 靠左對齊 */
+    }
+
+    .item-manage-grid-edit {
+      /* 繼承 .item-manage-layout */
+      padding: 0.5rem; /* 8px */
+      border: 1px solid theme('colors.blue.300');
+      background-color: theme('colors.blue.50');
+      border-radius: 0.375rem; /* 6px */
+    }
+    .item-manage-grid-view {
+      /* 繼承 .item-manage-layout */
+      padding: 0.5rem; /* 8px */
+    }
+    .item-manage-grid-view:nth-child(even) { /* v3.10 改為 even */
+      background-color: theme('colors.gray.50');
+      border-radius: 0.375rem; /* 6px */
+    }
+    .item-manage-header {
+      /* 繼承 .item-manage-layout */
+      font-size: 0.75rem; /* 12px */
+      color: theme('colors.gray.500');
+      font-weight: 600;
+      padding: 0 0.5rem 0.25rem;
+      border-bottom: 1px solid theme('colors.gray.200');
+    }
+
+    /* v3.19.1 班級按鈕: 移除 active/inactive, 改由 HTML 控制 */
+    .class-button {
+      padding: 0.5rem 1rem; /* 8px 16px */
+      border-radius: 0.5rem; /* 8px */
+      font-weight: 600;
+      transition: all 0.2s ease;
+      border: 1px solid; /* 邊框改為必定存在 */
+    }
+    .class-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* v3.20 個人總覽列表 */
+    .log-list-item {
+      display: grid;
+      grid-template-columns: 100px 1fr 60px 60px; /* 時間 | 事由 | 分數 | 刪除 */
+      gap: 0.75rem; /* 12px */
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.375rem; /* 6px */
+    }
+    .log-list-item:nth-child(even) {
+      background-color: theme('colors.gray.50');
+    }
+    .log-list-header {
+      /* 繼承 .log-list-item */
+      font-size: 0.75rem; /* 12px */
+      color: theme('colors.gray.500');
+      font-weight: 600;
+      border-bottom: 1px solid theme('colors.gray.200');
+      padding-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body class="text-gray-800">
+
+  <div id="app" v-cloak>
+
+    <!-- ==== 上方 [設定/總覽區] (v3.19 大改) ==== -->
+    <header class="bg-white shadow-md p-4 space-y-3"> <!-- v3.19 增加垂直間距 -->
+       <div class="container mx-auto max-w-6xl flex justify-between items-center">
+        <h1 class="text-xl md:text-2xl font-bold text-gray-700">
+          優缺點紀錄
+        </h1>
+        <!-- 右側按鈕區 -->
+        <div class="flex space-x-2">
+          <!-- v3.19 新增: 管理班級按鈕 (齒輪) -->
+          <button @click="openModal('manageClasses')"
+                  class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors flex items-center"
+                  title="新增/編輯/刪除班級">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+             管理班級
+          </button>
+          <!-- 只有在有班級時才顯示 -->
+          <button v-if="currentClassId" @click="openModal('manageStudents')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
+            管理學生
+          </button>
+          <button @click="openModal('manageItems')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
+            編輯評分項
+          </button>
+          <!-- v3.22 匯出 CSV 按鈕 (加入載入狀態) -->
+          <button v-if="currentClassId" @click="exportCSV"
+                  :disabled="isAnyLoading"
+                  class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                  :class="isAnyLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-600'">
+            <span v-if="isExportingCSV">匯出中...</span>
+            <span v-else>總表</span>
+          </button>
+        </div>
+      </div>
+       <!-- v3.19.1 修正: 班級按鈕列樣式直接寫入 -->
+       <div v-if="classes.length > 0" class="container mx-auto max-w-6xl flex flex-wrap gap-2 items-center">
+         <span class="text-sm font-medium text-gray-500 mr-2">目前班級:</span>
+         <button v-for="cls in classes" :key="cls.id"
+                 @click="switchClass(cls.id)"
+                 :disabled="isAnyLoading || inlineEditClassId !== null"
+                 class="class-button"
+                 :class="cls.id === currentClassId
+                   ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                   : 'bg-gray-200 text-gray-700 border-gray-300 hover:bg-gray-300 hover:border-gray-400'">
+           {{ cls.name }}
+         </button>
+       </div>
+    </header>
+
+    <!-- ==== 初始載入 / 錯誤畫面 ==== -->
+    <div v-if="loading" class="flex-grow flex items-center justify-center">
+        <div class="text-center p-8">
+            <svg class="animate-spin h-12 w-12 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-lg text-gray-600">Dojo 系統載入中...</p>
+        </div>
+    </div>
+    <div v-else-if="error" class="flex-grow flex items-center justify-center">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-md max-w-lg mx-auto">
+            <h3 class="font-bold text-xl mb-2">發生錯誤</h3>
+            <p class="text-base">{{ error }}</p>
+            <p class="mt-4 text-sm">請確認您的 Firebase 設定與 Firestore 規則 (Rules) 是否正確。</p>
+        </div>
+    </div>
+    <!-- v3.19 修改提示 (如果沒有班級, 應直接顯示 "管理班級" 彈窗按鈕) -->
+    <div v-else-if="classes.length === 0" class="flex-grow flex items-center justify-center">
+        <p class="text-lg text-gray-600">目前沒有任何班級，請點選右上角「⚙️ 管理班級」來新增。</p>
+    </div>
+    <!-- v-3.19 移除 !currentClassId 的提示 (因為班級按鈕會直接顯示) -->
+
+    <!-- ==== 中間 [學生目標區] (v3.20 改用 Flexbox) ==== -->
+    <main v-else-if="currentClassId" class="container mx-auto max-w-6xl p-4 md:p-6"> <!-- v3.19 加上 v-else-if -->
+       <div class="mb-4 flex justify-end">
+            <button @click="toggleSelectAll"
+                    :class="allSelected ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'"
+                    class="text-white px-4 py-2 rounded-lg font-medium transition-colors">
+              {{ allSelected ? '取消全選' : '全選' }} ({{ selectedStudents.size }})
+            </button>
+       </div>
+      <!-- v-3.20 改用 flex-wrap -->
+      <div class="flex flex-wrap justify-center gap-3 md:gap-4">
+            <div v-for="student in students" :key="student.id"
+                 @click="toggleStudent(student.id)"
+                 class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[150px] max-w-[200px]"
+                 :class="{ 'selected': selectedStudents.has(student.id) }">
+
+              <div class="student-name-row px-3 py-3 md:px-4 md:py-4 bg-gray-50 border-b border-gray-200">
+                <p class="student-name-text text-sm md:text-base font-semibold text-gray-800 truncate text-center">{{ student.name }}</p>
+              </div>
+
+              <div class="px-2 py-2 md:px-3 md:py-3 flex justify-center items-center space-x-2">
+                <span class="inline-block bg-blue-100 text-blue-800 text-xs md:text-sm font-bold px-2 py-1 md:px-3 rounded-full">
+                  {{ student.totalAcademicPoints }}
+                </span>
+                <span class="inline-block bg-yellow-100 text-yellow-800 text-xs md:text-sm font-bold px-2 py-1 md:px-3 rounded-full">
+                  {{ student.totalBehaviorMerits }} / {{ student.totalBehaviorDemerits }}
+                </span>
+              </div>
+            </div>
+      </div>
+    </main>
+
+    <!-- ==== 下方 [固定行動區] ==== -->
+    <footer v-if="currentClassId" class="sticky bottom-0 bg-white border-t-2 border-blue-500 shadow-lg p-4 z-10">
+       <div class="container mx-auto max-w-6xl flex justify-center items-center space-x-2 md:space-x-4">
+        <button @click="openModal('scoreStudent')" :disabled="selectedStudents.size === 0 || isAnyLoading"
+                class="bg-blue-500 text-white py-3 px-4 rounded-lg font-bold text-lg transition-colors flex-1 md:flex-none"
+                :class="[(selectedStudents.size === 0 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600', isSubmittingScore ? 'button-loading' : '']">
+          評分
+        </button>
+        <button @click="openModal('viewLog')" :disabled="selectedStudents.size !== 1 || isAnyLoading"
+                class="bg-gray-600 text-white py-3 px-4 rounded-lg font-bold text-lg transition-colors flex-1 md:flex-none"
+                :class="[(selectedStudents.size !== 1 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700']">
+          個人總覽
+        </button>
+        <!-- v3.23 修改: 觸發 randomSelect 函數 (開啟抽籤 modal) -->
+        <button @click="randomSelect" :disabled="students.length === 0 || isAnyLoading"
+                class="bg-purple-500 text-white py-3 px-4 rounded-lg font-bold text-lg transition-colors flex-1 md:flex-none"
+                :class="[(students.length === 0 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600']">
+          隨機抽籤
+        </button>
+      </div>
+    </footer>
+    
+    <!-- ==== 彈出視窗 (Modal) 結構 ==== -->
+    <transition name="modal">
+      <div v-if="modal.isOpen"
+           class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+           @click.self="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null ? null : closeModal()">
+        <div class="modal-transition bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+          
+          <!-- v3.11 隱藏評分視窗的標題 -->
+          <header v-if="modal.view !== 'scoreStudent'" class="p-4 md:p-6 border-b border-gray-200">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800">{{ modal.title }}</h2>
+          </header>
+          
+          <!-- v3.12 調整: 評分視窗高度 (需求 3) -->
+          <main class="max-h-[80vh] overflow-y-auto" :class="{ 'p-4 md:p-6': modal.view !== 'scoreStudent' }">
+            
+            <!-- v3.19 調整: 管理班級彈窗 (移除切換功能) -->
+            <div v-if="modal.view === 'manageClasses'">
+               <!-- 新增班級 -->
+              <form @submit.prevent="createClass" class="mb-6 pb-6 border-b">
+                <label for="newClassName" class="block text-lg font-medium text-gray-800 mb-2">新增班級</label>
+                <div class="flex space-x-2">
+                  <input type="text" id="newClassName" v-model="newClassName" required
+                         placeholder="例如: 八年一班"
+                         class="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <button type="submit" :disabled="!newClassName.trim() || isAnyLoading"
+                          class="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium transition-colors"
+                          :class="(!newClassName.trim() || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'">
+                     <span v-if="isCreatingClass">新增中...</span>
+                     <span v-else>新增</span>
+                  </button>
+                </div>
+                <p v-if="classError" class="text-red-500 text-sm mt-1">{{ classError }}</p>
+              </form>
+
+              <!-- 班級列表 (管理用) -->
+              <h3 class="text-lg font-medium text-gray-800 mb-3">班級列表 (管理)</h3>
+              <ul v-if="classes.length > 0" class="space-y-2">
+                <li v-for="cls in classes" :key="cls.id"
+                    class="p-2 border rounded-lg flex justify-between items-center"
+                    :class="{ 'bg-gray-50': inlineEditClassId !== cls.id, 'bg-blue-50 border-blue-200': inlineEditClassId === cls.id }"> <!-- v3.19 移除 currentClassId 高亮 -->
+                  
+                  <!-- 觀看模式 -->
+                  <template v-if="inlineEditClassId !== cls.id">
+                    <span class="font-medium flex-grow"> <!-- v3.19 移除 click & cursor -->
+                       {{ cls.name }}
+                       <span v-if="cls.id === currentClassId" class="text-blue-600 text-xs ml-1">(目前)</span>
+                    </span>
+                    <div class="space-x-2">
+                      <button @click="startClassInlineEdit(cls)"
+                              :disabled="isAnyLoading || inlineEditClassId !== null"
+                              class="text-blue-600 hover:text-blue-800 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        編輯
+                      </button>
+                      <button @click="confirmDeleteClass(cls.id, cls.name)"
+                              :disabled="isAnyLoading || inlineEditClassId !== null"
+                              class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                         <span v-if="isDeletingClass && deletingClassId === cls.id">刪除中...</span>
+                         <span v-else>刪除</span>
+                      </button>
+                    </div>
+                  </template>
+                  
+                  <!-- 原地編輯模式 -->
+                  <template v-else>
+                    <input type="text" v-model="inlineEditClassName"
+                           class="flex-grow px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                    <div class="space-x-2 ml-2">
+                      <button @click="saveClassEdit"
+                              :disabled="!inlineEditClassName.trim() || isSavingClassEdit"
+                              class="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50">
+                         <span v-if="isSavingClassEdit">儲存...</span>
+                         <span v-else>儲存</span>
+                      </button>
+                      <button @click="cancelClassInlineEdit" :disabled="isSavingClassEdit"
+                              class="text-gray-600 hover:text-gray-800 text-sm font-medium disabled:opacity-50">
+                        取消
+                      </button>
+                    </div>
+                  </template>
+                </li>
+              </ul>
+              <p v-else class="text-gray-500">尚無任何班級。</p>
+            </div>
+            
+            <!-- v3.17 評分視窗 (介面修正) -->
+            <div v-if="modal.view === 'scoreStudent'">
+              <!-- v3.17 類別頁籤 (Tailwind Class 控制) -->
+              <div class="flex px-4 pt-4"> 
+                <button 
+                  @click="pointCategory = 'academic'"
+                  class="flex-grow p-3 text-base font-semibold text-center transition-colors border border-b-0 rounded-t-lg -mb-px"
+                  :class="pointCategory === 'academic' 
+                    ? 'bg-blue-500 text-white border-blue-500' 
+                    : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200 hover:text-gray-700'">
+                  課堂分數
+                </button>
+                <button 
+                  @click="pointCategory = 'behavior'"
+                  class="flex-grow p-3 text-base font-semibold text-center transition-colors border border-b-0 rounded-t-lg -mb-px"
+                  :class="pointCategory === 'behavior' 
+                    ? 'bg-yellow-500 text-white border-yellow-500' 
+                    : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200 hover:text-gray-700'">
+                  優缺點
+                </button>
+              </div>
+              
+              <!-- v3.11 兩欄佈局 -->
+              <!-- v3.17 容器邊框匹配 active tab -->
+              <div class="grid grid-cols-2 gap-4 p-4 md:p-6 border border-t-0 rounded-b-lg" 
+                   :class="{ 
+                     'border-blue-500': pointCategory === 'academic', 
+                     'border-yellow-500': pointCategory === 'behavior',
+                     'border-gray-300': pointCategory !== 'academic' && pointCategory !== 'behavior' /* Fallback */
+                   }"> 
+                 <!-- 加分項目 -->
+                 <div class="score-item-list"> <!-- v3.14 需求4: 再壓縮列高 -->
+                    <h3 v-if="scoringItems.add[pointCategory].length > 0" class="text-sm font-semibold text-green-600 mb-1 text-center">加分項目</h3>
+                    <button v-for="item in scoringItems.add[pointCategory]" :key="item.id"
+                            @click="confirmSubmitPoint(item)"
+                            :disabled="isAnyLoading"
+                            class="score-item-button positive">
+                      <span class="font-medium text-gray-800">{{ item.reason }}</span>
+                      <span class="text-green-600 font-bold ml-2">(+{{ item.value }})</span>
+                       <!-- 載入指示器 -->
+                       <span v-if="isSubmittingScore && submittingScoreItemId === item.id" class="inline-block ml-2">
+                         <svg class="animate-spin h-4 w-4 text-gray-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                         </svg>
+                       </span>
+                    </button>
+                    <p v-if="scoringItems.add[pointCategory].length === 0" class="text-xs text-gray-400 text-center py-4">尚無加分項目</p>
+                 </div>
+
+                 <!-- 減分項目 -->
+                 <div class="score-item-list"> <!-- v3.14 需求4: 再壓縮列高 -->
+                    <h3 v-if="scoringItems.remove[pointCategory].length > 0" class="text-sm font-semibold text-red-600 mb-1 text-center">減分項目</h3>
+                    <button v-for="item in scoringItems.remove[pointCategory]" :key="item.id"
+                            @click="confirmSubmitPoint(item)"
+                            :disabled="isAnyLoading"
+                            class="score-item-button negative">
+                      <span class="font-medium text-gray-800">{{ item.reason }}</span>
+                      <span class="text-red-600 font-bold ml-2">({{ item.value }})</span>
+                       <!-- 載入指示器 -->
+                       <span v-if="isSubmittingScore && submittingScoreItemId === item.id" class="inline-block ml-2">
+                         <svg class="animate-spin h-4 w-4 text-gray-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                         </svg>
+                       </span>
+                    </button>
+                    <p v-if="scoringItems.remove[pointCategory].length === 0" class="text-xs text-gray-400 text-center py-4">尚無減分項目</p>
+                 </div>
+              </div>
+            </div>
+
+            <!-- v3.9 介面優化: 管理學生 -->
+            <div v-if="modal.view === 'manageStudents'">
+              <!-- 學生列表 -->
+              <h3 class="text-lg font-medium text-gray-800 mb-3">學生列表 ({{ students.length }}人)</h3>
+              <ul v-if="students.length > 0" class="space-y-1 mb-6">
+                <li v-for="student in students" :key="student.id"
+                    class="flex justify-between items-center p-2 border rounded-lg"
+                    :class="inlineEditStudentId === student.id ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'">
+                  
+                  <!-- 觀看模式 -->
+                  <template v-if="inlineEditStudentId !== student.id">
+                    <span class="font-medium">{{ student.name }}</span>
+                    <div class="space-x-2">
+                      <button @click="startInlineEdit(student)"
+                              :disabled="isAnyLoading || inlineEditStudentId !== null"
+                              class="text-blue-600 hover:text-blue-800 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        編輯
+                      </button>
+                      <button @click="confirmDeleteStudent(student.id, student.name)"
+                              :disabled="isAnyLoading || inlineEditStudentId !== null"
+                              class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                         <span v-if="isDeletingStudent && deletingStudentId === student.id">刪除中...</span>
+                         <span v-else>刪除</span>
+                      </button>
+                    </div>
+                  </template>
+                  
+                  <!-- v3.6 原地編輯模式 -->
+                  <template v-else>
+                    <input type="text" v-model="inlineEditStudentName"
+                           class="flex-grow px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                    <div class="space-x-2 ml-2">
+                      <button @click="saveStudentEdit"
+                              :disabled="!inlineEditStudentName.trim() || isSavingStudentEdit"
+                              class="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50">
+                         <span v-if="isSavingStudentEdit">儲存...</span>
+                         <span v-else>儲存</span>
+                      </button>
+                      <button @click="cancelInlineEdit" :disabled="isSavingStudentEdit"
+                              class="text-gray-600 hover:text-gray-800 text-sm font-medium disabled:opacity-50">
+                        取消
+                      </button>
+                    </div>
+                  </template>
+                </li>
+              </ul>
+               <p v-else class="text-gray-500 mb-6">此班級尚無學生。</p>
+
+              <!-- v3.9 版面調整: 批次新增學生 (移至下方) -->
+              <form @submit.prevent="batchAddStudents" class="pt-6 border-t">
+                <label for="batchStudentNames" class="block text-lg font-medium text-gray-800 mb-3">批次新增學生</label>
+                <textarea id="batchStudentNames" v-model="batchStudentNames" required rows="5"
+                         placeholder="請貼上學生名單，一行一個。
+例如:
+01 王小明
+2 丁大雨
+03 陳中
+...
+(系統會自動補 0、排序、並跳過重複名稱)"
+                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                <button type="submit" :disabled="!batchStudentNames.trim() || isAnyLoading"
+                        class="mt-3 bg-indigo-600 text-white px-4 py-2 rounded-md font-medium transition-colors w-full"
+                        :class="(!batchStudentNames.trim() || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'">
+                   <span v-if="isBatchAddingStudent">新增中...</span>
+                   <span v-else>批次新增 {{ batchStudentNames.split('\n').filter(n => n.trim()).length }} 位學生</span>
+                </button>
+                <p v-if="addStudentError" class="text-red-500 text-sm mt-2">{{ addStudentError }}</p>
+              </form>
+            </div>
+
+            <!-- v3.10 介面優化: 管理評分項 -->
+            <div v-if="modal.view === 'manageItems'">
+              
+              <!-- v3.10 介面優化: 新增項目表單 -->
+              <form @submit.prevent="createScoringItem" class="mb-6 pb-6 border-b item-manage-grid">
+                <div>
+                  <label class="block text-lg font-medium text-gray-800 mb-2">新增評分項目</label>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <!-- 事由 -->
+                    <div>
+                      <label for="newItemReason" class="block text-sm font-medium text-gray-700 mb-1">事由</label>
+                      <input type="text" id="newItemReason" v-model="newItemData.reason" placeholder="例如: 認真上課" required
+                             class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <!-- 分數 -->
+                    <div>
+                      <label for="newItemValue" class="block text-sm font-medium text-gray-700 mb-1">分數 (+/-)</label>
+                      <input type="number" id="newItemValue" v-model.number="newItemData.value" required
+                             class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <!-- 類別 -->
+                    <div>
+                      <label for="newItemCategory" class="block text-sm font-medium text-gray-700 mb-1">類別</label>
+                      <select id="newItemCategory" v-model="newItemData.category"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="academic">課堂分數</option>
+                        <option value="behavior">優缺點</option>
+                      </select>
+                    </div>
+                    <!-- v3.10 移除排序欄位 -->
+                  </div>
+                </div>
+                <button type="submit" :disabled="!newItemData.reason.trim() || isAnyLoading"
+                        class="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium transition-colors self-end"
+                        :class="(!newItemData.reason.trim() || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'">
+                  <span v-if="isCreatingItem">新增中...</span>
+                  <span v-else>新增</span>
+                </button>
+              </form>
+              <p v-if="itemError" class="text-red-500 text-sm mb-4">{{ itemError }}</p>
+
+              <!-- 項目列表 -->
+              <h3 class="text-lg font-medium text-gray-800 mb-3">項目列表</h3>
+              <div class="space-y-4">
+                <div v-for="(typeItems, typeKey) in categorizedItems" :key="typeKey">
+                  <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">
+                    {{ typeKey === 'academic' ? '課堂分數' : '優缺點' }}
+                  </h4>
+                  <!-- v3.10.7 介面優化: 統一欄位寬度 -->
+                  <div v-if="typeItems.add.length > 0 || typeItems.remove.length > 0">
+                    <div class="item-manage-header item-manage-layout">
+                      <span>事由</span>
+                      <span>分數</span>
+                      <span>類別</span>
+                      <span class="text-center">調整排序</span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <!-- 加分項目列表 -->
+                    <ul class="space-y-1">
+                      <template v-for="(item, index) in typeItems.add" :key="item.id">
+                        <!-- 編輯模式 -->
+                        <li v-if="inlineEditItemId === item.id" class="item-manage-layout item-manage-grid-edit">
+                          <input type="text" v-model="inlineEditItemData.reason" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                          <input type="number" v-model.number="inlineEditItemData.value" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                          <select v-model="inlineEditItemData.category" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                            <option value="academic">課堂分數</option>
+                            <option value="behavior">優缺點</option>
+                          </select>
+                          
+                          <span class="text-xs text-gray-400 text-center">編輯中</span>
+                          
+                          <button @click="saveItemEdit(item.id)" :disabled="!inlineEditItemData.reason.trim() || isSavingItemEdit"
+                                  class="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50">
+                             <span v-if="isSavingItemEdit && savingItemId === item.id">儲存...</span>
+                             <span v-else>儲存</span>
+                          </button>
+                          <button @click="cancelItemInlineEdit" :disabled="isSavingItemEdit"
+                                  class="text-gray-600 hover:text-gray-800 text-sm font-medium disabled:opacity-50">
+                            取消
+                          </button>
+                        </li>
+                        <!-- 觀看模式 -->
+                        <li v-else class="item-manage-layout item-manage-grid-view">
+                          <span class="font-medium text-gray-800 truncate">{{ item.reason }}</span>
+                          <span class="text-green-600 font-bold">(+{{ item.value }})</span>
+                          <span class="text-xs text-gray-500">{{ item.category === 'academic' ? '課堂' : '優點' }}</span>
+                          <!-- v3.10 升級: 排序按鈕 -->
+                          <div class="flex justify-center space-x-1">
+                            <button @click="moveItem(item, index, typeItems.add, 'up')" 
+                                    :disabled="index === 0 || isMovingItem"
+                                    class="text-blue-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                                <span v-if="isMovingItem && movingItemId === item.id">...</span>
+                                <span v-else>⬆</span>
+                            </button>
+                            <button @click="moveItem(item, index, typeItems.add, 'down')"
+                                    :disabled="index === typeItems.add.length - 1 || isMovingItem"
+                                    class="text-blue-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                                <span v-if="isMovingItem && movingItemId === item.id">...</span>
+                                <span v-else>⬇</span>
+                            </button>
+                          </div>
+                          <button @click="startItemInlineEdit(item)" :disabled="isAnyLoading || inlineEditItemId !== null"
+                                  class="text-blue-600 hover:text-blue-800 text-sm font-medium disabled:opacity-50">
+                            編輯
+                          </button>
+                          <button @click="confirmDeleteItem(item.id, item.reason)" :disabled="isAnyLoading || inlineEditItemId !== null"
+                                  class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50">
+                            <span v-if="isDeletingItem && deletingItemId === item.id">刪除...</span>
+                            <span v-else>刪除</span>
+                          </button>
+                        </li>
+                      </template>
+                    </ul>
+                    <!-- 減分項目列表 -->
+                    <ul class="space-y-1">
+                      <template v-for="(item, index) in typeItems.remove" :key="item.id">
+                        <!-- 編輯模式 -->
+                        <li v-if="inlineEditItemId === item.id" class="item-manage-layout item-manage-grid-edit">
+                          <input type="text" v-model="inlineEditItemData.reason" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                          <input type="number" v-model.number="inlineEditItemData.value" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                          <select v-model="inlineEditItemData.category" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
+                            <option value="academic">課堂分數</option>
+                            <option value="behavior">優缺點</option>
+                          </select>
+
+                          <span class="text-xs text-gray-400 text-center">編輯中</span>
+
+                          <button @click="saveItemEdit(item.id)" :disabled="!inlineEditItemData.reason.trim() || isSavingItemEdit"
+                                  class="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50">
+                             <span v-if="isSavingItemEdit && savingItemId === item.id">儲存...</span>
+                             <span v-else>儲存</span>
+                          </button>
+                          <button @click="cancelItemInlineEdit" :disabled="isSavingItemEdit"
+                                  class="text-gray-600 hover:text-gray-800 text-sm font-medium disabled:opacity-50">
+                            取消
+                          </button>
+                        </li>
+                        <!-- 觀看模式 -->
+                        <li v-else class="item-manage-layout item-manage-grid-view">
+                          <span class="font-medium text-gray-800 truncate">{{ item.reason }}</span>
+                          <span class="text-red-600 font-bold">({{ item.value }})</span>
+                          <span class="text-xs text-gray-500">{{ item.category === 'academic' ? '課堂' : '缺點' }}</span>
+                          <!-- v-3.10 升級: 排序按鈕 -->
+                          <div class="flex justify-center space-x-1">
+                            <button @click="moveItem(item, index, typeItems.remove, 'up')" 
+                                    :disabled="index === 0 || isMovingItem"
+                                    class="text-blue-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                                <span v-if="isMovingItem && movingItemId === item.id">...</span>
+                                <span v-else>⬆</span>
+                            </button>
+                            <button @click="moveItem(item, index, typeItems.remove, 'down')"
+                                    :disabled="index === typeItems.remove.length - 1 || isMovingItem"
+                                    class="text-blue-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                                <span v-if="isMovingItem && movingItemId === item.id">...</span>
+                                <span v-else>⬇</span>
+                            </button>
+                          </div>
+                          <button @click="startItemInlineEdit(item)" :disabled="isAnyLoading || inlineEditItemId !== null"
+                                  class="text-blue-600 hover:text-blue-800 text-sm font-medium disabled:opacity-50">
+                            編輯
+                          </button>
+                          <button @click="confirmDeleteItem(item.id, item.reason)" :disabled="isAnyLoading || inlineEditItemId !== null"
+                                  class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50">
+                            <span v-if="isDeletingItem && deletingItemId === item.id">刪除...</span>
+                            <span v-else>刪除</span>
+                          </button>
+                        </li>
+                      </template>
+                    </ul>
+                  </div>
+                  <p v-else class="text-sm text-gray-500">此類別尚無評分項目。</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- v3.21 實作: 個人總覽 (介面修改 + 刪除) -->
+            <div v-if="modal.view === 'viewLog'">
+              
+              <!-- 載入中 -->
+              <div v-if="isFetchingLog" class="flex justify-center items-center h-32">
+                 <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                 </svg>
+                 <span class="ml-3 text-gray-600">正在載入紀錄...</span>
+              </div>
+              
+              <!-- 錯誤 -->
+              <p v-else-if="logError" class="text-red-500 text-center">{{ logError }}</p>
+              
+              <!-- 紀錄列表 -->
+              <div v-else>
+                <!-- v3.21 總分顯示 -->
+                <div class="mb-4 p-3 bg-gray-100 rounded-lg flex justify-around">
+                  <div class="text-center">
+                    <span class="text-xs text-gray-500 block">課堂總分數</span>
+                    <span class="text-xl font-bold text-blue-600">{{ viewingStudent?.totalAcademicPoints || 0 }}</span>
+                  </div>
+                  <div class="text-center">
+                    <span class="text-xs text-gray-500 block">優缺點總和</span>
+                    <span class="text-xl font-bold text-yellow-600">
+                      {{ (viewingStudent?.totalBehaviorMerits || 0) }} / {{ (viewingStudent?.totalBehaviorDemerits || 0) }}
+                    </span>
+                  </div>
+                </div>
+                
+                <!-- v3.21 課堂分數紀錄 -->
+                <div class="mb-4">
+                  <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">課堂分數紀錄</h4>
+                  <div v-if="categorizedLog.academic.length > 0">
+                    <div class="log-list-header log-list-item">
+                      <span>時間</span>
+                      <span>事由</span>
+                      <span class="text-center">分數</span>
+                      <span class="text-center">操作</span>
+                    </div>
+                    <ul class="space-y-1 mt-1">
+                      <li v-for="log in categorizedLog.academic" :key="log.id" class="log-list-item">
+                        <span class="text-xs text-gray-600">{{ formatTimestamp(log.timestamp) }}</span>
+                        <span class="font-medium text-gray-800 truncate">{{ log.reason }}</span>
+                        <span class="font-bold text-center" :class="log.value > 0 ? 'text-green-600' : 'text-red-600'">
+                          {{ log.value > 0 ? '+' : '' }}{{ log.value }}
+                        </span>
+                        <button @click="confirmDeleteLog(log)" 
+                                :disabled="isAnyLoading"
+                                class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50 text-center">
+                           <span v-if="isDeletingLog && deletingLogId === log.id">...</span>
+                           <span v-else>刪除</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                  <p v-else class="text-sm text-gray-500 text-center py-2">尚無課堂分數紀錄</p>
+                </div>
+
+                <!-- v-3.21 優缺點紀錄 -->
+                <div>
+                  <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">優缺點紀錄</h4>
+                  <div v-if="categorizedLog.behavior.length > 0">
+                    <div class="log-list-header log-list-item">
+                      <span>時間</span>
+                      <span>事由</span>
+                      <span class="text-center">分數</span>
+                      <span class="text-center">操作</span>
+                    </div>
+                    <ul class="space-y-1 mt-1">
+                      <li v-for="log in categorizedLog.behavior" :key="log.id" class="log-list-item">
+                        <span class="text-xs text-gray-600">{{ formatTimestamp(log.timestamp) }}</span>
+                        <span class="font-medium text-gray-800 truncate">{{ log.reason }}</span>
+                        <span class="font-bold text-center" :class="log.value > 0 ? 'text-green-600' : 'text-red-600'">
+                          {{ log.value > 0 ? '+' : '' }}{{ log.value }}
+                        </span>
+                        <button @click="confirmDeleteLog(log)" 
+                                :disabled="isAnyLoading"
+                                class="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50 text-center">
+                           <span v-if="isDeletingLog && deletingLogId === log.id">...</span>
+                           <span v-else>刪除</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                  <p v-else class="text-sm text-gray-500 text-center py-2">尚無優缺點紀錄</p>
+                </div>
+
+              </div>
+
+            </div>
+
+            <!-- v3.23 新增: 隨機抽籤設定 -->
+            <div v-if="modal.view === 'randomSelectSettings'">
+              <div class="space-y-4">
+                <label for="randomCount" class="block text-sm font-medium text-gray-700">要抽出幾位學生？ (最多 {{ students.length }} 位)</label>
+                <input type="number" id="randomCount" v-model.number="randomSelectCount"
+                       min="1" :max="students.length"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <button @click="executeRandomSelect"
+                        :disabled="randomSelectCount <= 0 || randomSelectCount > students.length"
+                        class="w-full bg-purple-500 text-white px-4 py-2 rounded-md font-medium transition-colors"
+                        :class="(randomSelectCount <= 0 || randomSelectCount > students.length) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600'">
+                  開始抽籤
+                </button>
+              </div>
+            </div>
+            
+          </main>
+          
+          <!-- v3.23 修改: 抽籤視窗使用自訂頁尾 (關閉按鈕) -->
+          <footer v-if="modal.view !== 'scoreStudent' && modal.view !== 'randomSelectSettings'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
+            <button @click="closeModal" :disabled="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null" 
+                    class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors"
+                    :class="(isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'"> 
+              關閉
+            </button>
+          </footer>
+          <!-- v3.23 抽籤視窗的獨立頁尾 (只有關閉) -->
+           <footer v-if="modal.view === 'randomSelectSettings'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
+            <button @click="closeModal" 
+                    class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors hover:bg-gray-300">
+              取消
+            </button>
+          </footer>
+        </div>
+      </div>
+    </transition>
+
+    <!-- v3.10.8 升級: 共用確認對話框 -->
+    <div v-if="confirmDialog.isOpen" class="confirm-dialog-backdrop">
+        <div class="confirm-dialog">
+            <h3 class="text-lg font-bold mb-3 text-gray-800">{{ confirmDialog.title }}</h3>
+            <p class="text-gray-600 mb-5 whitespace-pre-wrap">{{ confirmDialog.message }}</p>
+            <div class="flex justify-end space-x-3">
+                <button @click="cancelConfirm" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-medium hover:bg-gray-300 transition-colors">
+                    {{ confirmDialog.cancelText }}
+                </button>
+                <button @click="executeConfirm" 
+                        class="px-4 py-2 rounded-md font-medium transition-colors"
+                        :class="confirmDialog.confirmColorClass">
+                    {{ confirmDialog.confirmText }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+  </div> <!-- /#app -->
+  
+  <!-- Firebase SDK -->
+  <script type="module">
+    // 匯入 Firebase 核心功能
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    
+    // v3.25.2 修正: 移除 lite.js, 將 getFirestore 和 enableIndexedDbPersistence 移至主模組
+    /*
+    import { 
+      getFirestore, 
+      enablePersistence
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-lite.js";
+    */
+
+    import { 
+      getFirestore, // v3.25.2 移回
+      enableIndexedDbPersistence, // v3.25.2 修正: 正確的函數名稱
+      collection, query, where, onSnapshot, doc,
+      runTransaction, getDoc, updateDoc, setDoc, serverTimestamp,
+      addDoc, deleteDoc, writeBatch, getDocs 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"; 
+
+    // v3.25 移除: Firebase 設定已移至 <head>
+    /*
+    const firebaseConfig = {
+      apiKey: "...",
+      ...
+    };
+    */
+    
+    // v3.25.3 修正: Firebase 實例不能是 Vue ref, 否則 PWA 離線會失敗
+    let db = null;
+    let auth = null;
+    const userId = Vue.ref(null); // userId 可以是 ref
+
+    // Vue App
+    const app = Vue.createApp({
+      setup() {
+        // === 狀態管理 (v3.21) ===
+        const loading = Vue.ref(true);
+        const error = Vue.ref(null); 
+        
+        // 評分
+        const isSubmittingScore = Vue.ref(false); 
+        const submittingScoreItemId = Vue.ref(null);
+        
+        // 學生管理
+        const isBatchAddingStudent = Vue.ref(false); 
+        const isDeletingStudent = Vue.ref(false); 
+        const deletingStudentId = Vue.ref(null); 
+        const isSavingStudentEdit = Vue.ref(false); 
+        const savingStudentId = Vue.ref(null); 
+        const addStudentError = Vue.ref(''); 
+        
+        // 評分項管理
+        const isCreatingItem = Vue.ref(false);
+        const isDeletingItem = Vue.ref(false);
+        const deletingItemId = Vue.ref(null);
+        const isSavingItemEdit = Vue.ref(false);
+        const savingItemId = Vue.ref(null);
+        const itemError = Vue.ref('');
+        const isMovingItem = Vue.ref(false); 
+        const movingItemId = Vue.ref(null); 
+
+        // 班級管理
+        const isCreatingClass = Vue.ref(false);
+        const isSavingClassEdit = Vue.ref(false);
+        const savingClassId = Vue.ref(null);
+        const isDeletingClass = Vue.ref(false);
+        const deletingClassId = Vue.ref(null);
+        const classError = Vue.ref('');
+        const isExportingCSV = Vue.ref(false); // v3.22 新增
+
+        // 個人總覽 (v3.21)
+        const isFetchingLog = Vue.ref(false);
+        const isDeletingLog = Vue.ref(false);
+        const deletingLogId = Vue.ref(null);
+        const studentLog = Vue.ref([]);
+        const logError = Vue.ref('');
+        const viewingStudent = Vue.ref(null); // v3.21 新增: 用於顯示總分
+
+        const classes = Vue.ref([]); 
+        const students = Vue.ref([]); 
+        const scoringItemsRaw = Vue.ref([]); 
+        
+        const currentClassId = Vue.ref(null);
+        const selectedStudents = Vue.reactive(new Set());
+        const modal = Vue.reactive({ isOpen: false, view: '', title: '' });
+        
+        // 評分
+        const pointCategory = Vue.ref('academic'); 
+        
+        // 學生管理
+        const batchStudentNames = Vue.ref(''); 
+        const inlineEditStudentId = Vue.ref(null); 
+        const inlineEditStudentName = Vue.ref(''); 
+
+        // 評分項管理
+        const newItemData = Vue.reactive({ reason: '', value: 1, category: 'academic' }); 
+        const inlineEditItemId = Vue.ref(null); 
+        const inlineEditItemData = Vue.reactive({ reason: '', value: 1, category: 'academic' }); 
+
+        // 班級管理
+        const newClassName = Vue.ref('');
+        const inlineEditClassId = Vue.ref(null);
+        const inlineEditClassName = Vue.ref('');
+
+        // 隨機抽籤 (v3.23)
+        const randomSelectCount = Vue.ref(1);
+
+        // 共用確認對話框
+        const confirmDialog = Vue.reactive({ 
+            isOpen: false,
+            title: '',
+            message: '',
+            type: null, // 'deleteStudent', 'deleteItem', 'score', 'deleteClass', 'deleteLog' (v3.20)
+            data: null, 
+            confirmText: '確認',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+        });
+        
+        let unSubClasses = null;
+        let unSubStudents = null;
+        let unSubScoringItems = null;
+        let unSubStudentLog = null; // v3.20
+
+        // === Computed ===
+        const currentClass = Vue.computed(() => classes.value.find(c => c.id === currentClassId.value));
+        const allSelected = Vue.computed(() => students.value.length > 0 && selectedStudents.size === students.value.length);
+        
+        // v3.22 更新: 全域載入狀態
+        const isAnyLoading = Vue.computed(() => 
+          isSubmittingScore.value || 
+          isBatchAddingStudent.value || isDeletingStudent.value || isSavingStudentEdit.value ||
+          isCreatingItem.value || isDeletingItem.value || isSavingItemEdit.value || isMovingItem.value ||
+          isCreatingClass.value || isSavingClassEdit.value || isDeletingClass.value ||
+          isFetchingLog.value || isDeletingLog.value || isExportingCSV.value // v3.22
+        );
+        // v3.20 更新: 刪除狀態
+        const isDeleting = Vue.computed(() => isDeletingStudent.value || isDeletingItem.value || isDeletingClass.value || isDeletingLog.value);
+
+        // 評分項目 (from v3.4)
+        const scoringItems = Vue.computed(() => { 
+          const result = { add: { academic: [], behavior: [] }, remove: { academic: [], behavior: [] } };
+          for (const item of scoringItemsRaw.value) {
+            if (item.value > 0) { result.add[item.category]?.push(item); } 
+            else { result.remove[item.category]?.push(item); }
+          }
+          // v3.10 改用 order 排序
+          result.add.academic.sort((a, b) => (a.order || 0) - (b.order || 0));
+          result.add.behavior.sort((a, b) => (a.order || 0) - (b.order || 0));
+          result.remove.academic.sort((a, b) => (a.order || 0) - (b.order || 0));
+          result.remove.behavior.sort((a, b) => (a.order || 0) - (b.order || 0));
+          return result;
+        });
+
+        // v3.8 新增: 評分項管理用的分類
+        const categorizedItems = Vue.computed(() => {
+          const result = {
+            academic: { add: [], remove: [] },
+            behavior: { add: [], remove: [] }
+          };
+          for (const item of scoringItemsRaw.value) {
+            const category = result[item.category];
+            if (category) {
+              if (item.value > 0) { category.add.push(item); } 
+              else { category.remove.push(item); }
+            }
+          }
+          // 排序
+          Object.values(result).forEach(cat => {
+            // v3.10 改用 order 排序
+            cat.add.sort((a, b) => (a.order || 0) - (b.order || 0));
+            cat.remove.sort((a, b) => (a.order || 0) - (b.order || 0));
+          });
+          return result;
+        });
+
+        // v3.21 新增: 個人總覽分類
+        const categorizedLog = Vue.computed(() => {
+          const academic = [];
+          const behavior = [];
+          for (const log of studentLog.value) {
+            if (log.category === 'academic') {
+              academic.push(log);
+            } else {
+              behavior.push(log);
+            }
+          }
+          // v3.21 依照時間戳排序 (新到舊)
+          const sortByTimestamp = (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
+          academic.sort(sortByTimestamp);
+          behavior.sort(sortByTimestamp);
+          
+          return { academic, behavior };
+        });
+
+
+        // === Methods ===
+        
+        // 【v3.9.7 修正】
+        const loadInitialData = () => { 
+          if (!db) return; // v3.25.3 修正
+          const log = (msg) => console.log(`[DEBUG] ${msg}`);
+          const logError = (action, err) => {
+            console.error(`[ERROR] 載入 ${action} 失敗:`, err);
+            error.value = `無法載入 ${action}。請檢查 Firestore 規則。`;
+          };
+          
+          try {
+            const itemsQuery = query(collection(db, "scoringItems")); // v3.25.3 修正
+            log(`正在查詢 (Querying) scoringItems 於: scoringItems`);
+            unSubScoringItems = onSnapshot(itemsQuery, (snapshot) => {
+              scoringItemsRaw.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              log(`評分項已載入: ${scoringItemsRaw.value.length} 項`);
+            }, (err) => logError('scoringItems', err));
+          } catch (err) { logError('scoringItems (catch)', err); }
+
+          try {
+            const classesQuery = query(collection(db, "classes")); // v3.25.3 修正
+            log(`正在查詢 (Querying) classes 於: classes`);
+            unSubClasses = onSnapshot(classesQuery, (snapshot) => {
+              classes.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              // v3.18 班級排序
+              classes.value.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')); 
+              log(`班級列表已載入: ${classes.value.length} 班`);
+              // v3.18 如果目前選的班級被刪掉, 就切換到第一個
+              if (currentClassId.value && !classes.value.some(c => c.id === currentClassId.value)) {
+                 log(`[WARN] 目前班級 ${currentClassId.value} 已不存在, 切換到第一個班級`);
+                 currentClassId.value = classes.value.length > 0 ? classes.value[0].id : null;
+                 // 如果 currentClassId 被重設為 null (因為沒有班級了), 需要觸發一次 student 監聽器卸載
+                 if (!currentClassId.value && unSubStudents) {
+                     unSubStudents();
+                     log(`[DEBUG] 卸載學生監聽器 (因已無班級)`);
+                 } else if (currentClassId.value) {
+                     // 如果切換到第一個班級, 則觸發 switchClass (但不要關 modal)
+                     switchClass(currentClassId.value, false); 
+                 }
+              }
+              // 如果沒有 currentClassId 且有班級, 預設選第一個
+              if (!currentClassId.value && classes.value.length > 0) {
+                switchClass(classes.value[0].id, false); // 初始載入時不要關閉可能存在的 modal
+              }
+              loading.value = false; 
+            }, (err) => logError('classes', err));
+          } catch (err) { logError('classes (catch)', err); }
+        };
+        
+        // v3.19 調整: 增加 closeModal 控制
+        const switchClass = (classId, shouldCloseModal = true) => { 
+          if (classId === currentClassId.value) {
+            log(`[DEBUG] 班級 ${classId} 已經是目前班級, 不切換`);
+            if (shouldCloseModal) closeModal(); 
+            return; 
+          }
+          log(`[DEBUG] 切換班級至: ${classId}`);
+          currentClassId.value = classId;
+          selectedStudents.clear();
+          if (unSubStudents) { unSubStudents(); log(`[DEBUG] 卸載舊學生監聽器`); }
+          if (db && currentClassId.value) { // v3.25.3 修正
+            try {
+              const studentsQuery = query(collection(db, "students"), where("classId", "==", currentClassId.value)); // v3.25.3 修正
+              log(`[DEBUG] 正在查詢 (Querying) students 於: students where classId == ${currentClassId.value}`);
+              unSubStudents = onSnapshot(studentsQuery, (snapshot) => {
+                students.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // v3.9 使用 localeCompare 即可正確排序 (因 name 已標準化)
+                students.value.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+                log(`[DEBUG] 學生已載入: ${students.value.length} 人`);
+              }, (err) => { console.error(`[ERROR] 載入 students 失敗:`, err); error.value = "無法載入學生資料。"; });
+            } catch (err) { console.error(`[ERROR] 載入 students (catch) 失敗:`, err); }
+          }
+          if (shouldCloseModal) closeModal(); // v3.19 只有在需要時關閉
+        };
+        
+        // 【v3.9.3 修正】
+        const toggleStudent = (studentId) => { 
+           if (selectedStudents.has(studentId)) { selectedStudents.delete(studentId); } 
+           else { selectedStudents.add(studentId); }
+        };
+
+        // 【v3.9.3 修正】
+        const toggleSelectAll = () => { 
+           if (allSelected.value) { selectedStudents.clear(); } 
+           else { students.value.forEach(s => selectedStudents.add(s.id)); }
+        };
+
+        // v3.21 調整: 開啟個人總覽時觸發載入
+        const openModal = (viewName) => { 
+           modal.view = viewName;
+           modal.isOpen = true;
+           switch (viewName) {
+            case 'manageClasses': 
+              modal.title = '班級管理'; 
+              break;
+            case 'manageStudents': 
+              modal.title = `管理「${currentClass.value?.name || '...'}」學生`; 
+              break; 
+            case 'manageItems': 
+              modal.title = '編輯評分項目'; 
+              break;
+            case 'scoreStudent': 
+              modal.title = '請選擇評分項目'; 
+              break; 
+            case 'viewLog': 
+              const studentId = [...selectedStudents][0]; 
+              viewingStudent.value = students.value.find(s => s.id === studentId) || null; 
+              modal.title = `查看「${viewingStudent.value?.name || 'N/A'}」的個人紀錄`; 
+              loadStudentLog(studentId); 
+              break;
+            case 'randomSelectSettings': // v3.23
+              modal.title = '隨機抽籤';
+              // 確保數字不大於學生總數
+              if (randomSelectCount.value > students.value.length) {
+                randomSelectCount.value = students.value.length;
+              }
+              if (randomSelectCount.value < 1) {
+                randomSelectCount.value = 1;
+              }
+              break;
+            default: modal.title = '功能';
+          }
+        };
+        
+        // v3.23 更新: 重置抽籤狀態
+        const closeModal = () => { 
+           modal.isOpen = false;
+           // 重置狀態
+           pointCategory.value = 'academic';
+           cancelInlineEdit(); 
+           cancelItemInlineEdit(); 
+           cancelClassInlineEdit(); 
+           // v3.21 卸載個人總覽
+           if (unSubStudentLog) {
+             unSubStudentLog();
+             unSubStudentLog = null;
+             log(`[DEBUG] 卸載個人紀錄監聽器`);
+           }
+           studentLog.value = [];
+           logError.value = '';
+           viewingStudent.value = null;
+           // 重置表單
+           Object.assign(newItemData, { reason: '', value: 1, category: 'academic' }); 
+           newClassName.value = ''; 
+           classError.value = ''; 
+           randomSelectCount.value = 1; // v3.23
+        };
+
+        // 【v3.10.9 修正】評分確認
+        const confirmSubmitPoint = (item) => {
+          if (isAnyLoading.value) return;
+
+          // v3.10.9 組合學生姓名
+          const selectedNames = [...selectedStudents].map(id => {
+            return students.value.find(s => s.id === id)?.name || 'N/A';
+          }).join('、');
+
+          const actionText = item.value > 0 ? `增加 ${item.value}` : `扣除 ${Math.abs(item.value)}`;
+
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '確認評分',
+            message: `您確定要為 學生【${selectedNames}】 ${actionText} 分嗎？\n(事由: ${item.reason})`,
+            type: 'score',
+            data: item, // 將 item 存入 data
+            confirmText: '確認',
+            cancelText: '取消',
+            confirmColorClass: item.value > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'
+          });
+        };
+
+        // 【v3.10.11 修正】評分核心 (由 confirmSubmitPoint 觸發)
+        const submitPoint = async (item) => { 
+          if (selectedStudents.size === 0 || isSubmittingScore.value) return;
+          isSubmittingScore.value = true;
+          submittingScoreItemId.value = item.id; 
+          error.value = null; 
+          log(`[ACTION] 準備為 ${selectedStudents.size} 人加減分: ${item.reason} (${item.value})`);
+          try {
+            await Promise.all([...selectedStudents].map(async (studentId) => {
+              const studentRef = doc(db, "students", studentId); // v3.25.3 修正
+              const newLogRef = doc(collection(db, "pointLog")); // v3.25.3 修正
+              await runTransaction(db, async (transaction) => { // v3.25.3 修正
+                const studentDoc = await transaction.get(studentRef);
+                if (!studentDoc.exists()) { throw new Error(`找不到學生 ${studentId} 的資料！`); }
+                const studentData = studentDoc.data();
+                let newAcademicPoints = studentData.totalAcademicPoints || 0;
+                let newBehaviorMerits = studentData.totalBehaviorMerits || 0;
+                let newBehaviorDemerits = studentData.totalBehaviorDemerits || 0;
+                if (item.category === 'academic') { newAcademicPoints += item.value; } 
+                else { if (item.value > 0) { newBehaviorMerits += item.value; } else { newBehaviorDemerits += item.value; } }
+                const updateData = { totalAcademicPoints: newAcademicPoints, totalBehaviorMerits: newBehaviorMerits, totalBehaviorDemerits: newBehaviorDemerits };
+                const logEntry = { id: newLogRef.id, studentId: studentId, studentName: studentData.name || 'N/A', classId: currentClassId.value, reason: item.reason, value: item.value, category: item.category, timestamp: serverTimestamp() };
+                log(`[TRANSACTION] 準備更新 ${studentData.name}: ${JSON.stringify(updateData)}`);
+                log(`[TRANSACTION] 準備寫入 Log: ${newLogRef.id}`);
+                transaction.update(studentRef, updateData);
+                transaction.set(newLogRef, logEntry); 
+              }); 
+            })); 
+            log(`[SUCCESS] 成功為 ${selectedStudents.size} 位學生完成加減分 Transaction`);
+            selectedStudents.clear();
+            closeModal();
+            cancelConfirm(); // v3.10.10 修正: 關閉確認視窗
+          } catch (err) {
+            console.error("[ERROR] Transaction 失敗:", err);
+            error.value = `加減分失敗: ${err.message}。請檢查網路連線或 Firestore 規則。`;
+            cancelConfirm(); // v3.10.10 修正: 關閉確認視窗
+          } finally {
+            isSubmittingScore.value = false;
+            submittingScoreItemId.value = null;
+          }
+        }; 
+
+        // v3.22 實作: 總表匯出
+        const exportCSV = async () => {
+          if (isExportingCSV.value) return;
+          isExportingCSV.value = true;
+          log(`[ACTION] 開始匯出 CSV 總表...`);
+
+          // 輔助函數: 格式化時間 (M/D)
+          const formatTimestampForCSV = (fbTimestamp) => {
+            if (!fbTimestamp) return '';
+            try {
+              const d = fbTimestamp.toDate();
+              const m = d.getMonth() + 1;
+              const day = d.getDate();
+              return `${m}/${day}`;
+            } catch (e) { return ''; }
+          };
+
+          // 輔助函數: 處理 CSV 特殊字元
+          const escapeCSV = (str) => {
+            if (str === null || str === undefined) str = '';
+            let result = String(str);
+            // 如果包含逗號、雙引號或換行符, 就用雙引號包起來, 並將內部的雙引號替換為兩個雙引號
+            if (result.includes(',') || result.includes('"') || result.includes('\n')) {
+              result = `"${result.replace(/"/g, '""')}"`;
+            }
+            return result;
+          };
+
+          try {
+            // 1. 取得目前班級所有學生的所有 log
+            log(`[CSV] 正在讀取班級 ${currentClassId.value} 的所有 pointLog...`);
+            const logQuery = query(collection(db, "pointLog"), where("classId", "==", currentClassId.value)); // v3.25.3 修正
+            const querySnapshot = await getDocs(logQuery);
+            const allLogs = querySnapshot.docs.map(doc => doc.data());
+            log(`[CSV] 成功讀取 ${allLogs.length} 筆紀錄`);
+
+            // 2. 將 log 依照 studentId 分組
+            const logsByStudent = new Map();
+            for (const log of allLogs) {
+              if (!logsByStudent.has(log.studentId)) {
+                logsByStudent.set(log.studentId, []);
+              }
+              logsByStudent.get(log.studentId).push(log);
+            }
+
+            // 3. 產生 CSV 內容
+            let csvContent = "座號,姓名,課堂總分數,總優點數,總缺點數,課堂分數內容,優點內容,缺點內容\n";
+            
+            // 確保學生是按照座號排序
+            const sortedStudents = [...students.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+
+            for (const student of sortedStudents) {
+              const studentLogs = logsByStudent.get(student.id) || [];
+              // 紀錄要按照時間順序
+              studentLogs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+
+              const academicContent = [];
+              const meritContent = [];
+              const demeritContent = [];
+
+              for (const log of studentLogs) {
+                const dateStr = formatTimestampForCSV(log.timestamp);
+                const valueStr = log.value > 0 ? `+${log.value}` : log.value;
+                const entry = `${dateStr} ${log.reason} ${valueStr}`;
+                
+                if (log.category === 'academic') {
+                  academicContent.push(entry);
+                } else {
+                  if (log.value > 0) {
+                    meritContent.push(entry);
+                  } else {
+                    demeritContent.push(entry);
+                  }
+                }
+              }
+
+              // 規格書要求: "10/26作業缺交-1, 10/27答題+2..."
+              const academicStr = academicContent.join(', ');
+              const meritStr = meritContent.join(', ');
+              const demeritStr = demeritContent.join(', ');
+              
+              // 取得座號和姓名 (來自 05 王小明)
+              const nameMatch = student.name.match(/^(\d+)\s*(.+)$/);
+              const seat = nameMatch ? nameMatch[1] : 'N/A';
+              const name = nameMatch ? nameMatch[2] : student.name;
+
+              const row = [
+                seat,
+                name,
+                student.totalAcademicPoints || 0,
+                student.totalBehaviorMerits || 0,
+                student.totalBehaviorDemerits || 0,
+                escapeCSV(academicStr),
+                escapeCSV(meritStr),
+                escapeCSV(demeritStr)
+              ].join(',');
+              
+              csvContent += row + "\n";
+            }
+
+            // 4. 觸發下載
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8-sig;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const className = currentClass.value?.name || '班級';
+            link.setAttribute('download', `${className}_Dojo總表_${new Date().toLocaleDateString('zh-TW')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            log(`[SUCCESS] CSV 總表已觸發下載`);
+
+          } catch (err) {
+            console.error("[ERROR] 匯出 CSV 失敗:", err);
+            error.value = `匯出失敗: ${err.message}`;
+          } finally {
+            isExportingCSV.value = false;
+          }
+        };
+
+        // v3.23 實作: 隨機抽籤
+        const randomSelect = () => {
+          log(`[ACTION] 開啟隨機抽籤設定...`);
+          openModal('randomSelectSettings');
+        };
+
+        const executeRandomSelect = () => {
+          log(`[ACTION] 執行抽籤: ${randomSelectCount.value} 人`);
+          const count = Number(randomSelectCount.value);
+          if (count <= 0 || count > students.value.length) {
+            log(`[WARN] 抽籤人數不合法: ${count}`);
+            return;
+          }
+
+          // 清空目前選取
+          selectedStudents.clear();
+          
+          // 隨機排序
+          const shuffled = [...students.value].sort(() => 0.5 - Math.random());
+          
+          // 選出 N 人
+          const winners = shuffled.slice(0, count);
+          
+          // 加入選取 (高亮)
+          winners.forEach(student => {
+            selectedStudents.add(student.id);
+            log(`[DEBUG] 抽中: ${student.name}`);
+          });
+
+          closeModal();
+        };
+
+        // === v3.10.2 修正: 移至上方 ===
+        const cancelConfirm = () => { 
+           confirmDialog.isOpen = false;
+           confirmDialog.data = null;
+        };
+
+        // === 管理學生功能 (v3.9) ===
+        
+        // v3.9.7 修正: 加回遺失的函數
+        const normalizeStudentName = (name) => {
+          if (!name || !name.trim()) return null;
+          let standardized = name.trim();
+          // 匹配 "數字" + "任意空格" + "文字"
+          const match = standardized.match(/^(\d+)\s*(.+)$/);
+          if (match) {
+            const number = match[1].padStart(2, '0'); // 補 0
+            const studentName = match[2];
+            return `${number} ${studentName}`;
+          } else {
+            // 沒有數字座號
+            return `99 ${standardized}`; // 預設 99 排最後
+          }
+        };
+        
+        // v3.7 升級批次新增, v3.9 升級補0與過濾
+        const batchAddStudents = async () => {
+          if (!batchStudentNames.value.trim() || isBatchAddingStudent.value) return;
+          isBatchAddingStudent.value = true;
+          addStudentError.value = '';
+          
+          // v3.9 建立現有學生地圖 (用於過濾重複)
+          const existingNames = new Set(students.value.map(s => s.name));
+          
+          const names = batchStudentNames.value.split('\n')
+            .map(name => normalizeStudentName(name)) // v3.9 標準化
+            .filter(name => name && !existingNames.has(name)); // v3.9 過濾空值與重複
+          
+          if (names.length === 0) {
+            addStudentError.value = "沒有可新增的學生 (可能名稱重複或格式錯誤)。";
+            isBatchAddingStudent.value = false;
+            return;
+          }
+
+          log(`[ACTION] 準備批次新增 ${names.length} 位學生...`);
+          
+          try {
+            // v3.7 使用 WriteBatch 節省資源
+            const batch = writeBatch(db); // v3.25.3 修正
+            const timestamp = serverTimestamp();
+            
+            names.forEach(name => {
+              const newRef = doc(collection(db, "students")); // v3.25.3 修正
+              batch.set(newRef, {
+                id: newRef.id,
+                classId: currentClassId.value,
+                name: name, // v3.9 使用標準化名稱
+                totalAcademicPoints: 0,
+                totalBehaviorMerits: 0,
+                totalBehaviorDemerits: 0,
+                createdAt: timestamp
+              });
+            });
+            
+            await batch.commit();
+            log(`[SUCCESS] 成功批次新增 ${names.length} 位學生`);
+            batchStudentNames.value = ''; // 清空輸入框
+          } catch (err) {
+            console.error("[ERROR] 批次新增學生失敗:", err);
+            addStudentError.value = `新增失敗: ${err.message}`;
+          } finally {
+            isBatchAddingStudent.value = false;
+          }
+        };
+
+        const startInlineEdit = (student) => {
+          inlineEditStudentId.value = student.id;
+          inlineEditStudentName.value = student.name;
+        };
+
+        const cancelInlineEdit = () => {
+          inlineEditStudentId.value = null;
+          inlineEditStudentName.value = '';
+        };
+
+        // v3.9 升級補0
+        const saveStudentEdit = async () => {
+          const standardizedName = normalizeStudentName(inlineEditStudentName.value);
+          if (!standardizedName || isSavingStudentEdit.value) {
+            addStudentError.value = "名稱格式錯誤。";
+            return;
+          }
+          
+          isSavingStudentEdit.value = true;
+          savingStudentId.value = inlineEditStudentId.value;
+          addStudentError.value = '';
+          
+          try {
+            const studentRef = doc(db, "students", inlineEditStudentId.value); // v3.25.3 修正
+            await updateDoc(studentRef, {
+              name: standardizedName // v3.9 使用標準化名稱
+            });
+            log(`[ACTION] 學生名稱已更新: ${inlineEditStudentId.value} -> ${standardizedName}`);
+            cancelInlineEdit(); // 成功後退出編輯
+          } catch (err) {
+            console.error("[ERROR] 更新學生名稱失敗:", err);
+            addStudentError.value = `更新失敗: ${err.message}`;
+          } finally {
+            isSavingStudentEdit.value = false;
+            savingStudentId.value = null;
+          }
+        };
+
+        // v3.10.8 升級: 共用刪除
+        const confirmDeleteStudent = (studentId, studentName) => {
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '確認刪除學生',
+            message: `您確定要刪除「${studentName}」嗎？\n(此操作無法復原，但不會刪除歷史紀錄)`,
+            type: 'deleteStudent',
+            data: studentId,
+            confirmText: '確認刪除',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+          });
+        };
+
+        // v3.10.3 修正
+        const executeDeleteStudent = async (studentId) => {
+          if (isDeletingStudent.value) return;
+          isDeletingStudent.value = true;
+          deletingStudentId.value = studentId;
+          log(`[ACTION] 準備刪除學生: ${studentId}`);
+          try {
+            await deleteDoc(doc(db, "students", studentId)); // v3.25.3 修正
+            log(`[SUCCESS] 成功刪除學生: ${studentId}`);
+            cancelConfirm(); // 關閉確認視窗
+          } catch (err) {
+            console.error("[ERROR] 刪除學生失敗:", err);
+            addStudentError.value = `刪除失敗: ${err.message}`;
+            cancelConfirm(); // 關閉確認視窗
+          } finally {
+            isDeletingStudent.value = false;
+            deletingStudentId.value = null;
+          }
+        };
+
+        // === 管理評分項功能 (v3.10) ===
+
+        // v3.10 升級: 自動計算 order
+        const createScoringItem = async () => {
+          if (!newItemData.reason.trim() || isCreatingItem.value) return;
+          isCreatingItem.value = true;
+          itemError.value = '';
+          try {
+            // v3.10 自動計算新 order: 取目前最大的 order + 1
+            const maxOrder = Math.max(0, ...scoringItemsRaw.value.map(i => i.order || 0));
+            const newOrder = maxOrder + 1;
+
+            const newRef = doc(collection(db, "scoringItems")); // v3.25.3 修正
+            await setDoc(newRef, {
+              ...newItemData,
+              order: newOrder, // v3.10 自動加入 order
+              id: newRef.id,
+              createdAt: serverTimestamp()
+            });
+            log(`[SUCCESS] 已新增評分項: ${newItemData.reason} (Order: ${newOrder})`);
+            // 重置表單
+            Object.assign(newItemData, { reason: '', value: 1, category: 'academic' }); // v3.10 移除 order
+          } catch (err) {
+            console.error("[ERROR] 新增評分項失敗:", err);
+            itemError.value = `新增失敗: ${err.message}`;
+          } finally {
+            isCreatingItem.value = false;
+          }
+        };
+
+        const startItemInlineEdit = (item) => {
+          inlineEditItemId.value = item.id;
+          Object.assign(inlineEditItemData, {
+            reason: item.reason,
+            value: item.value,
+            category: item.category,
+            // v3.10 編輯時不需要 order
+          });
+        };
+
+        const cancelItemInlineEdit = () => {
+          inlineEditItemId.value = null;
+        };
+
+        // v3.10 升級: 移除 order 的更新
+        const saveItemEdit = async (itemId) => {
+          if (!inlineEditItemData.reason.trim() || isSavingItemEdit.value) return;
+          isSavingItemEdit.value = true;
+          savingItemId.value = itemId;
+          itemError.value = '';
+          try {
+            const itemRef = doc(db, "scoringItems", itemId); // v3.25.3 修正
+            // v3.10 不更新 order (order 只能由箭頭調整)
+            await updateDoc(itemRef, { 
+              reason: inlineEditItemData.reason,
+              value: inlineEditItemData.value,
+              category: inlineEditItemData.category
+            });
+            log(`[SUCCESS] 已更新評分項: ${itemId}`);
+            cancelItemInlineEdit();
+          } catch (err) {
+            console.error("[ERROR] 更新評分項失敗:", err);
+            itemError.value = `更新失敗: ${err.message}`;
+          } finally {
+            isSavingItemEdit.value = false;
+            savingItemId.value = null;
+          }
+        };
+
+        // v3.10.8 升級: 共用刪除
+        const confirmDeleteItem = (itemId, itemName) => {
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '確認刪除項目',
+            message: `您確定要刪除「${itemName}」嗎？\n(此操作無法復原)`,
+            type: 'deleteItem',
+            data: itemId,
+            confirmText: '確認刪除',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+          });
+        };
+
+        const executeDeleteItem = async (itemId) => {
+          if (isDeletingItem.value) return;
+          isDeletingItem.value = true;
+          deletingItemId.value = itemId;
+          log(`[ACTION] 準備刪除評分項: ${itemId}`);
+          try {
+            await deleteDoc(doc(db, "scoringItems", itemId)); // v3.25.3 修正
+            log(`[SUCCESS] 成功刪除評分項: ${itemId}`);
+            cancelConfirm(); // 關閉確認視窗
+          } catch (err) {
+            console.error("[ERROR] 刪除評分項失敗:", err);
+            itemError.value = `刪除失敗: ${err.message}`;
+            cancelConfirm(); // 關閉確認視窗
+          } finally {
+            isDeletingItem.value = false;
+            deletingItemId.value = null;
+          }
+        };
+
+        // v3.10 新增: 排序調整功能
+        const moveItem = async (item, index, list, direction) => {
+          if (isMovingItem.value) return;
+
+          const swapIndex = direction === 'up' ? index - 1 : index + 1;
+          if (swapIndex < 0 || swapIndex >= list.length) return; // 邊界檢查
+
+          const itemToSwap = list[swapIndex];
+          
+          isMovingItem.value = true;
+          movingItemId.value = item.id;
+          log(`[ACTION] 調整排序: ${item.reason} (Order: ${item.order}) <=> ${itemToSwap.reason} (Order: ${itemToSwap.order})`);
+          
+          try {
+            // v3.10.3 修正: 使用 writeBatch
+            const batch = writeBatch(db); // v3.25.3 修正
+            const itemRef = doc(db, "scoringItems", item.id); // v3.25.3 修正
+            const swapItemRef = doc(db, "scoringItems", itemToSwap.id); // v3.25.3 修正
+            
+            // 交換 order 值
+            batch.update(itemRef, { order: itemToSwap.order || 0 });
+            batch.update(swapItemRef, { order: item.order || 0 });
+            
+            await batch.commit();
+            log(`[SUCCESS] 排序已更新`);
+            
+            // 手動更新本地端資料，避免等待 onSnapshot 延遲
+            const tempOrder = item.order;
+            item.order = itemToSwap.order;
+            itemToSwap.order = tempOrder;
+            
+          } catch (err) {
+            console.error("[ERROR] 調整排序失敗:", err);
+            itemError.value = `排序失敗: ${err.message}`;
+          } finally {
+            isMovingItem.value = false;
+            movingItemId.value = null;
+          }
+        };
+
+        // === 班級管理功能 (v3.18) ===
+        const createClass = async () => {
+          if (!newClassName.value.trim() || isCreatingClass.value) return;
+          isCreatingClass.value = true;
+          classError.value = '';
+          try {
+            const newRef = doc(collection(db, "classes")); // v3.25.3 修正
+            await setDoc(newRef, {
+              id: newRef.id,
+              name: newClassName.value.trim(),
+              createdAt: serverTimestamp()
+            });
+            log(`[SUCCESS] 已新增班級: ${newClassName.value.trim()}`);
+            newClassName.value = ''; // 清空輸入
+          } catch (err) {
+            console.error("[ERROR] 新增班級失敗:", err);
+            classError.value = `新增失敗: ${err.message}`;
+          } finally {
+            isCreatingClass.value = false;
+          }
+        };
+
+        const startClassInlineEdit = (cls) => {
+          inlineEditClassId.value = cls.id;
+          inlineEditClassName.value = cls.name;
+        };
+
+        const cancelClassInlineEdit = () => {
+          inlineEditClassId.value = null;
+          inlineEditClassName.value = '';
+        };
+
+        const saveClassEdit = async () => {
+          if (!inlineEditClassName.value.trim() || isSavingClassEdit.value) {
+             classError.value = "班級名稱不能為空。";
+             return;
+          }
+          isSavingClassEdit.value = true;
+          savingClassId.value = inlineEditClassId.value;
+          classError.value = '';
+          try {
+            const classRef = doc(db, "classes", inlineEditClassId.value); // v3.25.3 修正
+            await updateDoc(classRef, {
+              name: inlineEditClassName.value.trim()
+            });
+            log(`[SUCCESS] 已更新班級名稱: ${inlineEditClassId.value} -> ${inlineEditClassName.value.trim()}`);
+            cancelClassInlineEdit();
+          } catch (err) {
+            console.error("[ERROR] 更新班級名稱失敗:", err);
+            classError.value = `更新失敗: ${err.message}`;
+          } finally {
+            isSavingClassEdit.value = false;
+            savingClassId.value = null;
+          }
+        };
+
+        const confirmDeleteClass = (classId, className) => {
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '確認刪除班級',
+            message: `您確定要刪除「${className}」嗎？\n(注意：此操作只會刪除班級本身，班級內的學生和評分紀錄將會保留，但無法再透過此班級訪問)`,
+            type: 'deleteClass',
+            data: classId,
+            confirmText: '確認刪除',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+          });
+        };
+        
+        const executeDeleteClass = async (classId) => {
+          if (isDeletingClass.value) return;
+          isDeletingClass.value = true;
+          deletingClassId.value = classId;
+          log(`[ACTION] 準備刪除班級: ${classId}`);
+          try {
+            await deleteDoc(doc(db, "classes", classId)); // v3.25.3 修正
+            log(`[SUCCESS] 成功刪除班級: ${classId}`);
+            // 如果刪除的是目前班級, currentClassId 會在 onSnapshot 中被重設
+            cancelConfirm(); 
+          } catch (err) {
+            console.error("[ERROR] 刪除班級失敗:", err);
+            classError.value = `刪除失敗: ${err.message}`;
+            cancelConfirm(); 
+          } finally {
+            isDeletingClass.value = false;
+            deletingClassId.value = null;
+          }
+        };
+
+        // === v3.21 個人總覽功能 (修正 Bug) ===
+        // v3.21: 載入學生個人紀錄
+        const loadStudentLog = (studentId) => {
+          log(`[ACTION] 載入學生 ${studentId} 的個人紀錄...`);
+          if (unSubStudentLog) { unSubStudentLog(); } // 卸載舊的
+          
+          isFetchingLog.value = true;
+          logError.value = '';
+
+          try {
+            const logQuery = query(collection(db, "pointLog"), where("studentId", "==", studentId)); // v3.25.3 修正
+            
+            unSubStudentLog = onSnapshot(logQuery, (snapshot) => {
+              studentLog.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              log(`[DEBUG] 成功載入 ${studentLog.value.length} 筆個人紀錄`);
+              isFetchingLog.value = false;
+            }, (err) => {
+              console.error("[ERROR] 載入個人紀錄失敗:", err);
+              logError.value = "載入個人紀錄失敗。";
+              isFetchingLog.value = false;
+            });
+
+          } catch (err) {
+            console.error("[ERROR] 查詢個人紀錄 (catch) 失敗:", err);
+            logError.value = "查詢紀錄時發生錯誤。";
+            isFetchingLog.value = false;
+          }
+        };
+
+        const confirmDeleteLog = (logToDelete) => { // v3.21 參數 `log` -> `logToDelete`
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '確認刪除紀錄',
+            message: `您確定要刪除這筆紀錄嗎？\n(事由: ${logToDelete.reason} / 分數: ${logToDelete.value})\n\n此操作將會自動還原學生的總分。`,
+            type: 'deleteLog',
+            data: logToDelete,
+            confirmText: '確認刪除',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+          });
+        };
+
+        const executeDeleteLog = async (logToDelete) => { // v3.21 參數 `log` -> `logToDelete`
+          if (isDeletingLog.value) return;
+          isDeletingLog.value = true;
+          deletingLogId.value = logToDelete.id;
+          log(`[ACTION] 準備刪除紀錄 ${logToDelete.id} 並還原總分...`); 
+
+          try {
+            await runTransaction(db, async (transaction) => { // v3.25.3 修正
+              const studentRef = doc(db, "students", logToDelete.studentId); // v3.25.3 修正
+              const logRef = doc(db, "pointLog", logToDelete.id); // v3.25.3 修正
+
+              const studentDoc = await transaction.get(studentRef);
+              
+              if (studentDoc.exists()) {
+                const studentData = studentDoc.data();
+                let newAcademicPoints = studentData.totalAcademicPoints || 0;
+                let newBehaviorMerits = studentData.totalBehaviorMerits || 0;
+                let newBehaviorDemerits = studentData.totalBehaviorDemerits || 0;
+
+                // 還原分數
+                if (logToDelete.category === 'academic') {
+                  newAcademicPoints -= logToDelete.value;
+                } else {
+                  if (logToDelete.value > 0) {
+                    newBehaviorMerits -= logToDelete.value;
+                  } else {
+                    newBehaviorDemerits -= logToDelete.value;
+                  }
+                }
+                
+                const updateData = { 
+                  totalAcademicPoints: newAcademicPoints, 
+                  totalBehaviorMerits: newBehaviorMerits, 
+                  totalBehaviorDemerits: newBehaviorDemerits 
+                };
+
+                log(`[TRANSACTION] 準備更新 ${studentData.name} 總分: ${JSON.stringify(updateData)}`); // v3.21 修正
+                transaction.update(studentRef, updateData);
+              } else {
+                log(`[WARN] 找不到學生 ${logToDelete.studentId}，僅刪除 log`); // v3.21 修正
+              }
+              
+              log(`[TRANSACTION] 準備刪除 Log: ${logToDelete.id}`); // v3.21 修正
+              transaction.delete(logRef);
+            });
+
+            log(`[SUCCESS] 紀錄 ${logToDelete.id} 已刪除，總分已還原`); // v3.21 修正
+            // 從本地列表中移除 (onSnapshot 會自動處理, 但手動移除反應更快)
+            // studentLog.value = studentLog.value.filter(l => l.id !== logToDelete.id);
+            cancelConfirm();
+
+          } catch (err) {
+            console.error("[ERROR] 刪除紀錄失敗:", err);
+            logError.value = `刪除紀錄失敗: ${err.message}`;
+            cancelConfirm();
+          } finally {
+            isDeletingLog.value = false;
+            deletingLogId.value = null;
+          }
+        };
+
+        // v3.21 更新: 共用確認
+        const executeConfirm = () => {
+          const { type, data } = confirmDialog;
+          if (type === 'deleteStudent') {
+            executeDeleteStudent(data);
+          } else if (type === 'deleteItem') {
+            executeDeleteItem(data);
+          } else if (type === 'score') {
+            submitPoint(data);
+            // submitPoint 內部會自行 close modal & confirm
+          } else if (type === 'deleteClass') { 
+            executeDeleteClass(data);
+          } else if (type === 'deleteLog') { // v3.20
+            executeDeleteLog(data);
+          }
+        };
+
+
+        // === 其他功能 ===
+        
+        // 【v3.10.3 修正】還原 initFirebase
+        const initFirebase = async () => { 
+          try {
+            setLogLevel('debug'); 
+            window.log = (msg) => console.log(`%c[DEBUG] ${msg}`, 'color: green; font-weight: bold;');
+            log(`[INIT] 正在初始化 Firebase...`);
+            // v3.25 firebaseConfig 已在 <head> 宣告
+            const app = initializeApp(firebaseConfig); 
+            const firestore = getFirestore(app);
+            const authInstance = getAuth(app);
+            db = firestore; // v3.25.3 修正: 直接賦值
+            auth = authInstance; // v3.25.3 修正: 直接賦值
+            log(`[INIT] Firestore 和 Auth 已設定`);
+
+            // v3.25.2 修正: Kallar rätt funktion
+            try {
+              await enableIndexedDbPersistence(firestore);
+              log(`[INIT] PWA 離線資料庫 (Persistence) 已啟用`);
+            } catch (err) {
+              if (err.code == 'failed-precondition') {
+                log(`[WARN] PWA 離線資料庫: 只能在一個分頁啟用`);
+              } else if (err.code == 'unimplemented') {
+                log(`[WARN] PWA 離線資料庫: 目前瀏覽器不支援`);
+              }
+            }
+
+            onAuthStateChanged(auth, async (user) => { // v3.25.3 修正
+              if (user) {
+                userId.value = user.uid;
+                log(`[INIT] 驗證成功，User ID: ${userId.value}`);
+                loadInitialData();
+              } else {
+                userId.value = null;
+                log(`[INIT] 未登入，執行匿名登入...`);
+                try {
+                  await signInAnonymously(auth); // v3.25.3 修正
+                  log(`[INIT] 匿名登入成功。`);
+                } catch (anonError) {
+                   console.error("[FATAL] 匿名登入失敗:", anonError);
+                   error.value = `匿名登入失敗: ${anonError.message}. 請確認 Firebase Authentication 已啟用匿名登入。`;
+                   loading.value = false;
+                }
+              }
+            });
+          } catch (err) {
+            console.error("[FATAL] Firebase 初始化失敗:", err);
+            error.value = `Firebase 初始化失敗: ${err.message}`;
+            loading.value = false;
+          }
+        };
+
+        // === Lifecycle ===
+        Vue.onMounted(() => { initFirebase(); });
+
+        // === Expose ===
+        return {
+          // 狀態
+          loading, error, classes, students, currentClassId, currentClass,
+          selectedStudents, allSelected, modal, 
+          // 載入狀態 (v3.21 更新)
+          isAnyLoading, isDeleting,
+          isSubmittingScore, submittingScoreItemId,
+          isBatchAddingStudent, isDeletingStudent, deletingStudentId, isSavingStudentEdit, savingStudentId, addStudentError,
+          isCreatingItem, isDeletingItem, deletingItemId, isSavingItemEdit, savingItemId, itemError, isMovingItem, movingItemId, 
+          isCreatingClass, isSavingClassEdit, savingClassId, isDeletingClass, deletingClassId, classError, 
+          isFetchingLog, isDeletingLog, deletingLogId, studentLog, logError, viewingStudent, 
+          isExportingCSV, 
+          // 評分
+          pointCategory, scoringItems,
+          // 學生管理
+          batchStudentNames, inlineEditStudentId, inlineEditStudentName,
+          // 評分項管理
+          newItemData, categorizedItems, inlineEditItemId, inlineEditItemData,
+          // 班級管理
+          newClassName, inlineEditClassId, inlineEditClassName,
+          // 抽籤 (v3.23)
+          randomSelectCount,
+          // 共用確認
+          confirmDialog, 
+          
+          // 核心方法
+          toggleStudent, // v3.22.1 修正: 加回遺失的
+          toggleSelectAll, openModal, closeModal, switchClass,
+          // 評分方法
+          confirmSubmitPoint, 
+          // 學生方法
+          batchAddStudents, startInlineEdit, cancelInlineEdit, saveStudentEdit,
+          confirmDeleteStudent, 
+          // 評分項方法
+          createScoringItem, startItemInlineEdit, cancelItemInlineEdit, saveItemEdit,
+          confirmDeleteItem, moveItem, 
+          // 班級方法
+          createClass, startClassInlineEdit, cancelClassInlineEdit, saveClassEdit,
+          confirmDeleteClass, 
+          // 個人總覽方法 (v3.20)
+          loadStudentLog, 
+          formatTimestamp, confirmDeleteLog,
+          // 共用確認方法
+          cancelConfirm, executeConfirm, 
+          // 其他
+          exportCSV, 
+          randomSelect, executeRandomSelect // v3.23
+        };
+      }
+    });
+
+    app.mount('#app');
+
+    // v3.25.3 修正: 暫時註解 Service Worker 註冊, 避免在 blob 環境下報錯
+    /*
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(registration => {
+            console.log('[ServiceWorker] 註冊成功, 範圍: ', registration.scope);
+          })
+          .catch(error => {
+            console.log('[ServiceWorker] 註冊失敗: ', error);
+          });
+      });
+    }
+    */
+  </script>
+</body>
+</html>
+
