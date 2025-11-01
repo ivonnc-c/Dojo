@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- v3.24.1 修正: 補回遺失的 JS 程式碼 -->
-  <title>Dojo 紀錄系統 (v3.24.1 抽籤修正)</title>
+  <title>Dojo 紀錄系統 (v3.27.2 抽籤修正)</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b82f6">
 
-  <!-- v-3.25 新增: 集中 Firebase 設定 (仿照作業追蹤程式) -->
   <script>
     // =======================================================================
     // ⭐️⭐️⭐️【 Firebase 設定區塊 】⭐️⭐️⭐️
@@ -203,7 +201,8 @@
       padding: 0 0.5rem 0.25rem;
       border-bottom: 1px solid theme('colors.gray.200');
     }
-    /* v3.19.1 班級按鈕 */
+
+    /* v3.19.1 班級按鈕: 移除 active/inactive, 改由 HTML 控制 */
     .class-button {
       padding: 0.5rem 1rem; /* 8px 16px */
       border-radius: 0.5rem; /* 8px */
@@ -215,6 +214,7 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
     /* v3.20 個人總覽列表 */
     .log-list-item {
       display: grid;
@@ -236,7 +236,7 @@
       padding-bottom: 0.25rem;
     }
     
-    /* v3.24 抽籤工具箱: 學生格子 */
+    /* v3.24 (v3.27) 抽籤工具箱: 學生格子 */
     .draw-grid {
       border: 1px solid theme('colors.gray.300');
       background-color: theme('colors.white');
@@ -245,6 +245,7 @@
       text-align: center;
       font-weight: 500;
       transition: all 0.2s ease;
+      cursor: default; /* v3.27 */
     }
     .draw-grid.drawn { /* 已抽過 (不重複模式) */
       background-color: theme('colors.gray.300');
@@ -258,21 +259,25 @@
       transform: scale(1.05);
       font-weight: 700;
     }
+    /* v3.27 新增: 抽籤紀錄列表 */
+    .draw-history-item {
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.375rem;
+      background-color: theme('colors.gray.100');
+      border: 1px solid theme('colors.gray.200');
+    }
   </style>
-</head>
+
+  </head>
 <body class="text-gray-800">
 
   <div id="app" v-cloak>
 
-    <!-- ==== 上方 [設定/總覽區] (v3.19 大改) ==== -->
-    <header class="bg-white shadow-md p-4 space-y-3"> <!-- v3.19 增加垂直間距 -->
-       <div class="container mx-auto max-w-6xl flex justify-between items-center">
+    <header class="bg-white shadow-md p-4 space-y-3"> <div class="container mx-auto max-w-6xl flex justify-between items-center">
         <h1 class="text-xl md:text-2xl font-bold text-gray-700">
           優缺點紀錄
         </h1>
-        <!-- 右側按鈕區 -->
         <div class="flex space-x-2">
-          <!-- v3.19 新增: 管理班級按鈕 (齒輪) -->
           <button @click="openModal('manageClasses')"
                   class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors flex items-center"
                   title="新增/編輯/刪除班級">
@@ -282,14 +287,12 @@
             </svg>
              管理班級
           </button>
-          <!-- 只有在有班級時才顯示 -->
           <button v-if="currentClassId" @click="openModal('manageStudents')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
             管理學生
           </button>
           <button @click="openModal('manageItems')" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
             編輯評分項
           </button>
-          <!-- v3.22 匯出 CSV 按鈕 (加入載入狀態) -->
           <button v-if="currentClassId" @click="exportCSV"
                   :disabled="isAnyLoading"
                   class="bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -299,7 +302,6 @@
           </button>
         </div>
       </div>
-       <!-- v3.19.1 修正: 班級按鈕列樣式直接寫入 -->
        <div v-if="classes.length > 0" class="container mx-auto max-w-6xl flex flex-wrap gap-2 items-center">
          <span class="text-sm font-medium text-gray-500 mr-2">目前班級:</span>
          <button v-for="cls in classes" :key="cls.id"
@@ -314,7 +316,6 @@
        </div>
     </header>
 
-    <!-- ==== 初始載入 / 錯誤畫面 ==== -->
     <div v-if="loading" class="flex-grow flex items-center justify-center">
         <div class="text-center p-8">
             <svg class="animate-spin h-12 w-12 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -331,28 +332,20 @@
             <p class="mt-4 text-sm">請確認您的 Firebase 設定與 Firestore 規則 (Rules) 是否正確。</p>
         </div>
     </div>
-    <!-- v-3.19 修改提示 (如果沒有班級, 應直接顯示 "管理班級" 彈窗按鈕) -->
     <div v-else-if="classes.length === 0" class="flex-grow flex items-center justify-center">
         <p class="text-lg text-gray-600">目前沒有任何班級，請點選右上角「⚙️ 管理班級」來新增。</p>
     </div>
-    <!-- v-3.19 移除 !currentClassId 的提示 (因為班級按鈕會直接顯示) -->
-
-    <!-- ==== 中間 [學生目標區] (v3.20 改用 Flexbox) ==== -->
-    <main v-else-if="currentClassId" class="container mx-auto max-w-6xl p-4 md:p-6"> <!-- v3.19 加上 v-else-if -->
-       <div class="mb-4 flex justify-end">
+    <main v-else-if="currentClassId" class="container mx-auto max-w-6xl p-4 md:p-6"> <div class="mb-4 flex justify-end">
             <button @click="toggleSelectAll"
                     :class="allSelected ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'"
                     class="text-white px-4 py-2 rounded-lg font-medium transition-colors">
               {{ allSelected ? '取消全選' : '全選' }} ({{ selectedStudents.size }})
             </button>
        </div>
-      <!-- v-3.20 改用 flex-wrap -->
       <div class="flex flex-wrap justify-center gap-3 md:gap-4">
-            <!-- v3.26.3 修正: 調整學生卡片寬度 -->
             <div v-for="student in students" :key="student.id"
                  @click="toggleStudent(student.id)"
-                 class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[120px] max-w-[160px]"
-                 :class="{ 'selected': selectedStudents.has(student.id) }">
+                 class="student-grid bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md flex-1 min-w-[120px] max-w-[160px]" :class="{ 'selected': selectedStudents.has(student.id) }">
 
               <div class="student-name-row px-3 py-3 md:px-4 md:py-4 bg-gray-50 border-b border-gray-200">
                 <p class="student-name-text text-sm md:text-base font-semibold text-gray-800 truncate text-center">{{ student.name }}</p>
@@ -370,7 +363,6 @@
       </div>
     </main>
 
-    <!-- ==== 下方 [固定行動區] ==== -->
     <footer v-if="currentClassId" class="sticky bottom-0 bg-white border-t-2 border-blue-500 shadow-lg p-4 z-10">
        <div class="container mx-auto max-w-6xl flex justify-center items-center space-x-2 md:space-x-4">
         <button @click="openModal('scoreStudent')" :disabled="selectedStudents.size === 0 || isAnyLoading"
@@ -383,8 +375,7 @@
                 :class="[(selectedStudents.size !== 1 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700']">
           個人總覽
         </button>
-        <!-- v3.27 修改: 觸發 openModal('randomSelect') -->
-        <button @click="openModal('randomSelect')" :disabled="students.length === 0 || isAnyLoading"
+        <button @click="randomSelect" :disabled="students.length === 0 || isAnyLoading"
                 class="bg-purple-500 text-white py-3 px-4 rounded-lg font-bold text-lg transition-colors flex-1 md:flex-none"
                 :class="[(students.length === 0 || isAnyLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600']">
           隨機抽籤
@@ -392,26 +383,19 @@
       </div>
     </footer>
     
-    <!-- ==== 彈出視窗 (Modal) 結構 ==== -->
     <transition name="modal">
-      <!-- v3.27 調整: 抽籤 modal 不使用此 transition -->
-      <div v-if="modal.isOpen && modal.view !== 'randomSelect'"
+      <div v-if="modal.isOpen"
            class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
            @click.self="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null ? null : closeModal()">
-        <div class="modal-transition bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+        <div class="modal-transition bg-white rounded-xl shadow-2xl w-full"
+             :class="modal.view === 'randomSelect' ? 'max-w-3xl' : 'max-w-lg'">
           
-          <!-- v3.11 隱藏評分視窗的標題 -->
           <header v-if="modal.view !== 'scoreStudent'" class="p-4 md:p-6 border-b border-gray-200">
             <h2 class="text-xl md:text-2xl font-bold text-gray-800">{{ modal.title }}</h2>
           </header>
           
-          <!-- v3.12 調整: 評分視窗高度 (需求 3) -->
-          <main class="max-h-[80vh] overflow-y-auto" :class="{ 'p-4 md:p-6': modal.view !== 'scoreStudent' }">
-            
-            <!-- v3.19 調整: 管理班級彈窗 (移除切換功能) -->
-            <div v-if="modal.view === 'manageClasses'">
-               <!-- 新增班級 -->
-              <form @submit.prevent="createClass" class="mb-6 pb-6 border-b">
+          <main class="max-h-[80vh] overflow-y-auto" :class="{ 'p-4 md:p-6': modal.view !== 'scoreStudent' && modal.view !== 'randomSelect' }"> <div v-if="modal.view === 'manageClasses'">
+               <form @submit.prevent="createClass" class="mb-6 pb-6 border-b">
                 <label for="newClassName" class="block text-lg font-medium text-gray-800 mb-2">新增班級</label>
                 <div class="flex space-x-2">
                   <input type="text" id="newClassName" v-model="newClassName" required
@@ -427,17 +411,12 @@
                 <p v-if="classError" class="text-red-500 text-sm mt-1">{{ classError }}</p>
               </form>
 
-              <!-- 班級列表 (管理用) -->
               <h3 class="text-lg font-medium text-gray-800 mb-3">班級列表 (管理)</h3>
               <ul v-if="classes.length > 0" class="space-y-2">
                 <li v-for="cls in classes" :key="cls.id"
                     class="p-2 border rounded-lg flex justify-between items-center"
-                    :class="{ 'bg-gray-50': inlineEditClassId !== cls.id, 'bg-blue-50 border-blue-200': inlineEditClassId === cls.id }"> <!-- v3.19 移除 currentClassId 高亮 -->
-                  
-                  <!-- 觀看模式 -->
-                  <template v-if="inlineEditClassId !== cls.id">
-                    <span class="font-medium flex-grow"> <!-- v3.19 移除 click & cursor -->
-                       {{ cls.name }}
+                    :class="{ 'bg-gray-50': inlineEditClassId !== cls.id, 'bg-blue-50 border-blue-200': inlineEditClassId === cls.id }"> <template v-if="inlineEditClassId !== cls.id">
+                    <span class="font-medium flex-grow"> {{ cls.name }}
                        <span v-if="cls.id === currentClassId" class="text-blue-600 text-xs ml-1">(目前)</span>
                     </span>
                     <div class="space-x-2">
@@ -455,7 +434,6 @@
                     </div>
                   </template>
                   
-                  <!-- 原地編輯模式 -->
                   <template v-else>
                     <input type="text" v-model="inlineEditClassName"
                            class="flex-grow px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
@@ -477,9 +455,7 @@
               <p v-else class="text-gray-500">尚無任何班級。</p>
             </div>
             
-            <!-- v3.17 評分視窗 (介面修正) -->
             <div v-if="modal.view === 'scoreStudent'">
-              <!-- v3.17 類別頁籤 (Tailwind Class 控制) -->
               <div class="flex px-4 pt-4"> 
                 <button 
                   @click="pointCategory = 'academic'"
@@ -499,24 +475,19 @@
                 </button>
               </div>
               
-              <!-- v3.11 兩欄佈局 -->
-              <!-- v3.17 容器邊框匹配 active tab -->
               <div class="grid grid-cols-2 gap-4 p-4 md:p-6 border border-t-0 rounded-b-lg" 
                    :class="{ 
                      'border-blue-500': pointCategory === 'academic', 
                      'border-yellow-500': pointCategory === 'behavior',
                      'border-gray-300': pointCategory !== 'academic' && pointCategory !== 'behavior' /* Fallback */
                    }"> 
-                 <!-- 加分項目 -->
-                 <div class="score-item-list"> <!-- v3.14 需求4: 再壓縮列高 -->
-                    <h3 v-if="scoringItems.add[pointCategory].length > 0" class="text-sm font-semibold text-green-600 mb-1 text-center">加分項目</h3>
+                 <div class="score-item-list"> <h3 v-if="scoringItems.add[pointCategory].length > 0" class="text-sm font-semibold text-green-600 mb-1 text-center">加分項目</h3>
                     <button v-for="item in scoringItems.add[pointCategory]" :key="item.id"
                             @click="confirmSubmitPoint(item)"
                             :disabled="isAnyLoading"
                             class="score-item-button positive">
                       <span class="font-medium text-gray-800">{{ item.reason }}</span>
                       <span class="text-green-600 font-bold ml-2">(+{{ item.value }})</span>
-                       <!-- 載入指示器 -->
                        <span v-if="isSubmittingScore && submittingScoreItemId === item.id" class="inline-block ml-2">
                          <svg class="animate-spin h-4 w-4 text-gray-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -527,16 +498,13 @@
                     <p v-if="scoringItems.add[pointCategory].length === 0" class="text-xs text-gray-400 text-center py-4">尚無加分項目</p>
                  </div>
 
-                 <!-- 減分項目 -->
-                 <div class="score-item-list"> <!-- v3.14 需求4: 再壓縮列高 -->
-                    <h3 v-if="scoringItems.remove[pointCategory].length > 0" class="text-sm font-semibold text-red-600 mb-1 text-center">減分項目</h3>
+                 <div class="score-item-list"> <h3 v-if="scoringItems.remove[pointCategory].length > 0" class="text-sm font-semibold text-red-600 mb-1 text-center">減分項目</h3>
                     <button v-for="item in scoringItems.remove[pointCategory]" :key="item.id"
                             @click="confirmSubmitPoint(item)"
                             :disabled="isAnyLoading"
                             class="score-item-button negative">
                       <span class="font-medium text-gray-800">{{ item.reason }}</span>
                       <span class="text-red-600 font-bold ml-2">({{ item.value }})</span>
-                       <!-- 載入指示器 -->
                        <span v-if="isSubmittingScore && submittingScoreItemId === item.id" class="inline-block ml-2">
                          <svg class="animate-spin h-4 w-4 text-gray-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -549,16 +517,13 @@
               </div>
             </div>
 
-            <!-- v3.9 介面優化: 管理學生 -->
             <div v-if="modal.view === 'manageStudents'">
-              <!-- 學生列表 -->
               <h3 class="text-lg font-medium text-gray-800 mb-3">學生列表 ({{ students.length }}人)</h3>
               <ul v-if="students.length > 0" class="space-y-1 mb-6">
                 <li v-for="student in students" :key="student.id"
                     class="flex justify-between items-center p-2 border rounded-lg"
                     :class="inlineEditStudentId === student.id ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'">
                   
-                  <!-- 觀看模式 -->
                   <template v-if="inlineEditStudentId !== student.id">
                     <span class="font-medium">{{ student.name }}</span>
                     <div class="space-x-2">
@@ -576,7 +541,6 @@
                     </div>
                   </template>
                   
-                  <!-- v3.6 原地編輯模式 -->
                   <template v-else>
                     <input type="text" v-model="inlineEditStudentName"
                            class="flex-grow px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
@@ -597,7 +561,6 @@
               </ul>
                <p v-else class="text-gray-500 mb-6">此班級尚無學生。</p>
 
-              <!-- v3.9 版面調整: 批次新增學生 (移至下方) -->
               <form @submit.prevent="batchAddStudents" class="pt-6 border-t">
                 <label for="batchStudentNames" class="block text-lg font-medium text-gray-800 mb-3">批次新增學生</label>
                 <textarea id="batchStudentNames" v-model="batchStudentNames" required rows="5"
@@ -619,27 +582,22 @@
               </form>
             </div>
 
-            <!-- v3.10 介面優化: 管理評分項 -->
             <div v-if="modal.view === 'manageItems'">
               
-              <!-- v3.10 介面優化: 新增項目表單 -->
               <form @submit.prevent="createScoringItem" class="mb-6 pb-6 border-b item-manage-grid">
                 <div>
                   <label class="block text-lg font-medium text-gray-800 mb-2">新增評分項目</label>
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <!-- 事由 -->
                     <div>
                       <label for="newItemReason" class="block text-sm font-medium text-gray-700 mb-1">事由</label>
                       <input type="text" id="newItemReason" v-model="newItemData.reason" placeholder="例如: 認真上課" required
                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                     </div>
-                    <!-- 分數 -->
                     <div>
                       <label for="newItemValue" class="block text-sm font-medium text-gray-700 mb-1">分數 (+/-)</label>
                       <input type="number" id="newItemValue" v-model.number="newItemData.value" required
                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                     </div>
-                    <!-- 類別 -->
                     <div>
                       <label for="newItemCategory" class="block text-sm font-medium text-gray-700 mb-1">類別</label>
                       <select id="newItemCategory" v-model="newItemData.category"
@@ -648,8 +606,7 @@
                         <option value="behavior">優缺點</option>
                       </select>
                     </div>
-                    <!-- v3.10 移除排序欄位 -->
-                  </div>
+                    </div>
                 </div>
                 <button type="submit" :disabled="!newItemData.reason.trim() || isAnyLoading"
                         class="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium transition-colors self-end"
@@ -660,14 +617,12 @@
               </form>
               <p v-if="itemError" class="text-red-500 text-sm mb-4">{{ itemError }}</p>
 
-              <!-- 項目列表 -->
               <h3 class="text-lg font-medium text-gray-800 mb-3">項目列表</h3>
               <div class="space-y-4">
                 <div v-for="(typeItems, typeKey) in categorizedItems" :key="typeKey">
                   <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">
                     {{ typeKey === 'academic' ? '課堂分數' : '優缺點' }}
                   </h4>
-                  <!-- v3.10.7 介面優化: 統一欄位寬度 -->
                   <div v-if="typeItems.add.length > 0 || typeItems.remove.length > 0">
                     <div class="item-manage-header item-manage-layout">
                       <span>事由</span>
@@ -677,10 +632,8 @@
                       <span></span>
                       <span></span>
                     </div>
-                    <!-- 加分項目列表 -->
                     <ul class="space-y-1">
                       <template v-for="(item, index) in typeItems.add" :key="item.id">
-                        <!-- 編輯模式 -->
                         <li v-if="inlineEditItemId === item.id" class="item-manage-layout item-manage-grid-edit">
                           <input type="text" v-model="inlineEditItemData.reason" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
                           <input type="number" v-model.number="inlineEditItemData.value" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
@@ -701,12 +654,10 @@
                             取消
                           </button>
                         </li>
-                        <!-- 觀看模式 -->
                         <li v-else class="item-manage-layout item-manage-grid-view">
                           <span class="font-medium text-gray-800 truncate">{{ item.reason }}</span>
                           <span class="text-green-600 font-bold">(+{{ item.value }})</span>
                           <span class="text-xs text-gray-500">{{ item.category === 'academic' ? '課堂' : '優點' }}</span>
-                          <!-- v3.10 升級: 排序按鈕 -->
                           <div class="flex justify-center space-x-1">
                             <button @click="moveItem(item, index, typeItems.add, 'up')" 
                                     :disabled="index === 0 || isMovingItem"
@@ -733,10 +684,8 @@
                         </li>
                       </template>
                     </ul>
-                    <!-- 減分項目列表 -->
                     <ul class="space-y-1">
                       <template v-for="(item, index) in typeItems.remove" :key="item.id">
-                        <!-- 編輯模式 -->
                         <li v-if="inlineEditItemId === item.id" class="item-manage-layout item-manage-grid-edit">
                           <input type="text" v-model="inlineEditItemData.reason" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
                           <input type="number" v-model.number="inlineEditItemData.value" class="w-full px-2 py-1 border border-blue-400 rounded-md sm:text-sm">
@@ -757,12 +706,10 @@
                             取消
                           </button>
                         </li>
-                        <!-- 觀看模式 -->
                         <li v-else class="item-manage-layout item-manage-grid-view">
                           <span class="font-medium text-gray-800 truncate">{{ item.reason }}</span>
                           <span class="text-red-600 font-bold">({{ item.value }})</span>
                           <span class="text-xs text-gray-500">{{ item.category === 'academic' ? '課堂' : '缺點' }}</span>
-                          <!-- v-3.10 升級: 排序按鈕 -->
                           <div class="flex justify-center space-x-1">
                             <button @click="moveItem(item, index, typeItems.remove, 'up')" 
                                     :disabled="index === 0 || isMovingItem"
@@ -795,10 +742,8 @@
               </div>
             </div>
 
-            <!-- v3.21 實作: 個人總覽 (介面修改 + 刪除) -->
             <div v-if="modal.view === 'viewLog'">
               
-              <!-- 載入中 -->
               <div v-if="isFetchingLog" class="flex justify-center items-center h-32">
                  <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -807,12 +752,9 @@
                  <span class="ml-3 text-gray-600">正在載入紀錄...</span>
               </div>
               
-              <!-- 錯誤 -->
               <p v-else-if="logError" class="text-red-500 text-center">{{ logError }}</p>
               
-              <!-- 紀錄列表 -->
               <div v-else>
-                <!-- v3.21 總分顯示 -->
                 <div class="mb-4 p-3 bg-gray-100 rounded-lg flex justify-around">
                   <div class="text-center">
                     <span class="text-xs text-gray-500 block">課堂總分數</span>
@@ -826,7 +768,6 @@
                   </div>
                 </div>
                 
-                <!-- v3.21 課堂分數紀錄 -->
                 <div class="mb-4">
                   <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">課堂分數紀錄</h4>
                   <div v-if="categorizedLog.academic.length > 0">
@@ -855,7 +796,6 @@
                   <p v-else class="text-sm text-gray-500 text-center py-2">尚無課堂分數紀錄</p>
                 </div>
 
-                <!-- v-3.21 優缺點紀錄 -->
                 <div>
                   <h4 class="text-md font-semibold text-gray-700 mb-2 capitalize border-b pb-1">優缺點紀錄</h4>
                   <div v-if="categorizedLog.behavior.length > 0">
@@ -888,38 +828,36 @@
 
             </div>
 
-            <!-- v3.24 升級: 獨立隨機抽籤工具箱 -->
             <div v-if="modal.view === 'randomSelect'">
-              <!-- 上方: 控制區 -->
               <div class="p-4 border-b space-y-3 bg-gray-50">
-                <div class="flex items-center space-x-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <span class="text-sm font-medium text-gray-700">快速抽籤:</span>
-                  <button @click="executeRandomDraw(1)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">1人</button>
-                  <button @click="executeRandomDraw(2)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">2人</button>
-                  <button @click="executeRandomDraw(3)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">3人</button>
-                  <button @click="executeRandomDraw(4)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">4人</button>
-                  <button @click="executeRandomDraw(5)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">5人</button>
+                  <button @click="drawStudents(1)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">1人</button>
+                  <button @click="drawStudents(2)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">2人</button>
+                  <button @click="drawStudents(3)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">3人</button>
+                  <button @click="drawStudents(4)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">4人</button>
+                  <button @click="drawStudents(5)" :disabled="isAnyLoading" class="bg-white border border-gray-300 px-3 py-1 rounded-md text-sm font-medium hover:bg-gray-100 disabled:opacity-50">5人</button>
                 </div>
-                <div class="flex items-center space-x-2">
-                  <span class="text-sm font-medium text-gray-700">自訂人數:</span>
-                  <input type="number" v-model.number="randomSelectCount" min="1" :max="availableStudentCount"
+                <div class="flex flex-wrap items-center gap-2">
+                  <label for="customRandomCount" class="text-sm font-medium text-gray-700">自訂人數:</label>
+                  <input type="number" id="customRandomCount" v-model.number="customRandomCount" min="1" :max="availableStudentCount"
                          class="w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm sm:text-sm">
-                  <button @click="executeRandomDraw(randomSelectCount)" 
-                          :disabled="isAnyLoading || randomSelectCount <= 0 || randomSelectCount > availableStudentCount"
+                  <button @click="drawStudents(customRandomCount)" 
+                          :disabled="isAnyLoading || customRandomCount <= 0 || customRandomCount > availableStudentCount"
                           class="bg-purple-500 text-white px-3 py-1 rounded-md text-sm font-medium"
-                          :class="(randomSelectCount <= 0 || randomSelectCount > availableStudentCount) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600'">
-                    抽 {{ randomSelectCount }} 人
+                          :class="(customRandomCount <= 0 || customRandomCount > availableStudentCount) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-600'">
+                    抽 {{ customRandomCount }} 人
                   </button>
-                  <span v-if="!isRepeatingDraw" class="text-xs text-gray-500">(剩餘 {{ availableStudentCount }} 人)</span>
+                  <span v-if="!randomMode" class="text-xs text-gray-500">(剩餘 {{ availableStudentCount }} 人)</span>
                 </div>
                  <div class="flex items-center justify-between">
-                  <button @click="toggleRepeatDraw" 
+                  <button @click="toggleRandomMode" 
                           :disabled="isAnyLoading"
                           class="px-3 py-1 rounded-md text-sm font-medium border"
-                          :class="isRepeatingDraw ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-blue-100 border-blue-300 text-blue-800'">
-                    {{ isRepeatingDraw ? '模式: 重複抽籤' : '模式: 不重複抽籤' }}
+                          :class="randomMode ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-blue-100 border-blue-300 text-blue-800'">
+                    {{ randomMode ? '模式: 重複抽籤' : '模式: 不重複抽籤' }}
                   </button>
-                  <button @click="clearDrawState" 
+                  <button @click="clearDrawnHistory" 
                           :disabled="isAnyLoading"
                           class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-600">
                     清除狀態
@@ -927,24 +865,33 @@
                 </div>
               </div>
 
-              <!-- 中間: 學生格子區 -->
               <div class="p-4 grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-2">
                 <div v-for="student in students" :key="student.id"
                      class="draw-grid"
-                     :class="{
-                       'just-drawn': justDrawnStudentsSet.has(student.id),
-                       'drawn': !isRepeatingDraw && drawnStudentsSet.has(student.id) && !justDrawnStudentsSet.has(student.id)
-                     }">
-                  {{ student.name.split(' ')[0] }} <!-- 只顯示座號 -->
+                     :class="getSeatCellClass(student)">
+                  {{ getSeatNumberOnly(student) }}
                 </div>
               </div>
 
-              <!-- 下方: 紀錄區 (v3.24 移除) -->
+              <div class="p-4 border-t bg-gray-50">
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">本次抽中 ({{ justDrawnSeats.length }}人):</h4>
+                <div v-if="justDrawnSeats.length > 0" class="draw-history-item text-blue-800">
+                  {{ justDrawnSeats.join('、') }}
+                </div>
+                <p v-else class="text-xs text-gray-500">尚未抽籤</p>
+                
+                <h4 class="text-sm font-semibold text-gray-700 mt-3 mb-2">分組紀錄 ({{ drawnHistory.length }} 組):</h4>
+                <div v-if="drawnHistory.length > 0" class="space-y-2 max-h-32 overflow-y-auto">
+                  <div v-for="(group, index) in drawnHistory" :key="index" class="draw-history-item text-gray-800">
+                    <span class="font-bold">第 {{ group.groupNumber }} 組:</span> {{ group.seats.join('、') }}
+                  </div>
+                </div>
+                <p v-else class="text-xs text-gray-500">尚未有分組紀錄</p>
+              </div>
             </div>
             
           </main>
           
-          <!-- v3.24 修改: 抽籤視窗使用獨立頁尾 -->
           <footer v-if="modal.view !== 'scoreStudent' && modal.view !== 'randomSelect'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
             <button @click="closeModal" :disabled="isAnyLoading || inlineEditStudentId !== null || inlineEditItemId !== null || inlineEditClassId !== null" 
                     class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors"
@@ -952,8 +899,7 @@
               關閉
             </button>
           </footer>
-          <!-- v3.24 抽籤視窗的獨立頁尾 (只有關閉) -->
-           <footer v-if="modal.view === 'randomSelect'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
+          <footer v-if="modal.view === 'randomSelect'" class="p-4 bg-gray-50 border-t border-gray-200 text-right">
             <button @click="closeModal" 
                     class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition-colors hover:bg-gray-300">
               關閉
@@ -963,64 +909,6 @@
       </div>
     </transition>
 
-    <!-- v3.27 新增: 全螢幕隨機抽籤介面 -->
-    <transition name="modal">
-      <div v-if="modal.isOpen && modal.view === 'randomSelect'" class="random-select-modal">
-        <!-- 控制列 -->
-        <header class="random-select-controls">
-          <div class="container mx-auto max-w-6xl">
-            <!-- 標題與關閉 -->
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-xl md:text-2xl font-bold text-gray-800">{{ modal.title }}</h2>
-              <button @click="closeModal" class="text-gray-400 hover:text-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <!-- 功能按鈕 -->
-            <div class="flex flex-wrap gap-2">
-              <!-- 數字按鈕 -->
-              <button @click="drawStudents(1)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 1 人</button>
-              <button @click="drawStudents(2)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 2 人</button>
-              <button @click="drawStudents(3)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 3 人</button>
-              <button @click="drawStudents(4)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 4 人</button>
-              <button @click="drawStudents(5)" class="control-button bg-blue-500 text-white border-blue-600 hover:bg-blue-600">抽 5 人</button>
-              
-              <!-- 自訂人數 -->
-              <div class="flex items-center space-x-1 border border-gray-300 rounded-md pl-2">
-                <span class="text-sm font-medium text-gray-500">[...]</span>
-                <input type="number" v-model.number="customRandomCount" min="1" :max="students.length" class="w-16 p-2 border-l border-gray-300 focus:outline-none">
-                <button @click="drawStudents(customRandomCount)" class="control-button bg-purple-500 text-white border-purple-600 hover:bg-purple-600 rounded-l-none">抽 {{ customRandomCount }} 人</button>
-              </div>
-
-              <!-- 模式切換 -->
-              <button @click="toggleRandomMode" class="control-button"
-                      :class="randomMode === 'no-repeat' ? 'bg-yellow-500 text-white border-yellow-600' : 'bg-gray-100'">
-                {{ randomMode === 'no-repeat' ? '模式: 不重複' : '模式: 可重複' }}
-              </button>
-
-              <!-- 清除 -->
-              <button @click="clearDrawnHistory" class="control-button bg-red-500 text-white border-red-600 hover:bg-red-600">
-                清除紀錄
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <!-- 座號格 -->
-        <main class="random-select-grid">
-          <div v-for="student in students" :key="student.id"
-               :class="getSeatCellClass(student.id)">
-            {{ getSeatNumberOnly(student.name) }}
-          </div>
-        </main>
-      </div>
-    </transition>
-
-
-    <!-- v3.10.8 升級: 共用確認對話框 -->
     <div v-if="confirmDialog.isOpen" class="confirm-dialog-backdrop">
         <div class="confirm-dialog">
             <h3 class="text-lg font-bold mb-3 text-gray-800">{{ confirmDialog.title }}</h3>
@@ -1039,10 +927,8 @@
     </div>
 
 
-  </div> <!-- /#app -->
-  
-  <!-- Firebase SDK -->
-  <script type="module">
+  </div> ```
+<script type="module">
     // 匯入 Firebase 核心功能
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     
@@ -1129,7 +1015,7 @@
         const scoringItemsRaw = Vue.ref([]); 
         
         const currentClassId = Vue.ref(null);
-        const selectedStudents = Vue.reactive(new Set()); // 主畫面的選取 (for 評分)
+        const selectedStudents = Vue.reactive(new Set());
         const modal = Vue.reactive({ isOpen: false, view: '', title: '' });
         
         // 評分
@@ -1150,12 +1036,12 @@
         const inlineEditClassId = Vue.ref(null);
         const inlineEditClassName = Vue.ref('');
 
-        // 隨機抽籤 (v3.24 重構)
-        const randomSelectCount = Vue.ref(1);
-        const isRepeatingDraw = Vue.ref(false); // v3.24
-        const drawnStudentsSet = Vue.reactive(new Set()); // v3.24 已抽過 (灰色)
-        const justDrawnStudentsSet = Vue.reactive(new Set()); // v3.24 本次抽中 (藍色)
-
+        // 隨機抽籤 (v3.27)
+        const customRandomCount = Vue.ref(1);
+        const randomMode = Vue.ref(false); // false: 不重複, true: 重複
+        const drawnHistory = Vue.ref([]); // { groupNumber: 1, seats: ['01', '05'] }
+        const drawnSeats = Vue.reactive(new Set()); // 不重複模式下, 已抽過的 (灰色)
+        const justDrawnSeats = Vue.reactive(new Set()); // 本次抽中的 (藍色)
 
         // 共用確認對話框
         const confirmDialog = Vue.reactive({ 
@@ -1238,21 +1124,22 @@
             }
           }
           // v3.21 依照時間戳排序 (新到舊)
-          // v3.24.1 修正: 補回遺失的程式碼
           const sortByTimestamp = (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
           academic.sort(sortByTimestamp);
           behavior.sort(sortByTimestamp);
           
           return { academic, behavior };
-        }); // <-- v3.24.1 修正: 補回遺失的 '});'
+        });
 
-        // v3.24: 抽籤可用人數
+        // v3.27: 抽籤可用人數
         const availableStudentCount = Vue.computed(() => {
-          if (isRepeatingDraw.value) {
+          if (randomMode.value) { // 重複模式
             return students.value.length;
           }
-          return students.value.filter(s => !drawnStudentsSet.has(s.id)).length;
+          // 不重複模式
+          return students.value.filter(s => !drawnSeats.has(s.id)).length;
         });
+
 
         // === Methods ===
         
@@ -1365,22 +1252,22 @@
               modal.title = `查看「${viewingStudent.value?.name || 'N/A'}」的個人紀錄`; 
               loadStudentLog(studentId); 
               break;
-            case 'randomSelect': // v3.24
+            case 'randomSelect': // v3.27
               modal.title = '隨機抽籤 / 分組工具';
-              justDrawnStudentsSet.clear(); // 每次打開都清除上次的 "藍色"
+              justDrawnSeats.clear(); // 每次打開都清除上次的 "藍色"
               // 確保數字不大於學生總數
-              if (randomSelectCount.value > availableStudentCount.value) {
-                randomSelectCount.value = availableStudentCount.value > 0 ? availableStudentCount.value : 1;
+              if (customRandomCount.value > availableStudentCount.value) {
+                customRandomCount.value = availableStudentCount.value > 0 ? availableStudentCount.value : 1;
               }
-              if (randomSelectCount.value < 1) {
-                randomSelectCount.value = 1;
+              if (customRandomCount.value < 1) {
+                customRandomCount.value = 1;
               }
               break;
             default: modal.title = '功能';
           }
         };
         
-        // v3.24 更新: 重置抽籤狀態
+        // v3.27 更新: 重置抽籤狀態
         const closeModal = () => { 
            modal.isOpen = false;
            // 重置狀態
@@ -1401,11 +1288,12 @@
            Object.assign(newItemData, { reason: '', value: 1, category: 'academic' }); 
            newClassName.value = ''; 
            classError.value = ''; 
-           // v3.24 重置抽籤工具狀態
-           randomSelectCount.value = 1;
-           isRepeatingDraw.value = false;
-           drawnStudentsSet.clear();
-           justDrawnStudentsSet.clear();
+           // v3.27 重置抽籤工具狀態
+           customRandomCount.value = 1;
+           randomMode.value = false;
+           drawnHistory.value = [];
+           drawnSeats.clear();
+           justDrawnSeats.clear();
         };
 
         // 【v3.10.9 修正】評分確認
@@ -1592,67 +1480,104 @@
           }
         };
 
-        // v3.24 重構: 隨機抽籤
+        // v3.27 升級: 隨機抽籤
         const randomSelect = () => {
           log(`[ACTION] 開啟隨機抽籤工具...`);
           openModal('randomSelect');
         };
 
-        const executeRandomDraw = (count) => {
-          log(`[ACTION] 執行抽籤: ${count} 人 (模式: ${isRepeatingDraw.value ? '重複' : '不重複'})`);
+        const getSeatNumberOnly = (student) => {
+          // v3.27.1 修正: 確保 student.name 存在
+          if (!student || !student.name) return '';
+          return student.name.split(' ')[0] || student.name;
+        };
+
+        const getSeatCellClass = (student) => {
+          if (justDrawnSeats.has(student.id)) {
+            return 'draw-grid just-drawn';
+          }
+          if (!randomMode.value && drawnSeats.has(student.id)) {
+            return 'draw-grid drawn';
+          }
+          return 'draw-grid';
+        };
+
+        const drawStudents = (count) => {
+          log(`[ACTION] 執行抽籤: ${count} 人 (模式: ${randomMode.value ? '重複' : '不重複'})`);
           
-          if (count <= 0) return;
-          if (!isRepeatingDraw.value && count > availableStudentCount.value) {
-            alert(`剩餘人數不足 ${count} 人！`);
+          if (count === null || count === undefined || count <= 0) {
+             log(`[WARN] 抽籤人數不合法: ${count}`);
+             return;
+          }
+          const numToDraw = Number(count);
+          if (isNaN(numToDraw) || numToDraw <= 0) {
+             log(`[WARN] 抽籤人數不合法 (NaN): ${count}`);
+             return;
+          }
+
+
+          if (!randomMode.value && numToDraw > availableStudentCount.value) {
+            alert(`剩餘人數不足 ${numToDraw} 人！ (僅剩 ${availableStudentCount.value} 人)`);
             return;
           }
 
           // 1. 清除上次抽中的 (藍色)
-          justDrawnStudentsSet.clear();
+          justDrawnSeats.clear();
           
           // 2. 取得可抽籤名單
           let availableStudents = [];
-          if (isRepeatingDraw.value) {
+          if (randomMode.value) {
             availableStudents = [...students.value];
           } else {
-            availableStudents = students.value.filter(s => !drawnStudentsSet.has(s.id));
+            availableStudents = students.value.filter(s => !drawnSeats.has(s.id));
           }
 
           // 3. 隨機排序
           const shuffled = availableStudents.sort(() => 0.5 - Math.random());
           
           // 4. 選出 N 人
-          const winners = shuffled.slice(0, count);
+          const winners = shuffled.slice(0, numToDraw);
+          const winnerSeats = [];
           
           // 5. 加入高亮 (藍色), 並更新已抽中 (灰色)
           winners.forEach(student => {
-            justDrawnStudentsSet.add(student.id);
-            if (!isRepeatingDraw.value) {
-              drawnStudentsSet.add(student.id);
+            justDrawnSeats.add(student.id);
+            if (!randomMode.value) {
+              drawnSeats.add(student.id);
             }
+            winnerSeats.push(getSeatNumberOnly(student));
             log(`[DEBUG] 抽中: ${student.name}`);
           });
 
-          // 6. 重設輸入框 (如果人數抽完了)
-          if (!isRepeatingDraw.value && availableStudentCount.value === 0) {
-            randomSelectCount.value = 0;
-          } else if (randomSelectCount.value > availableStudentCount.value) {
-            randomSelectCount.value = availableStudentCount.value;
+          // 6. 加入紀錄區 (v3.27)
+          if (winners.length > 0) {
+            drawnHistory.value.unshift({
+              groupNumber: (drawnHistory.value.length + 1), // 修正組別編號
+              seats: winnerSeats.sort((a, b) => a.localeCompare(b, undefined, {numeric: true})) // 修正排序
+            });
+          }
+
+          // 7. 重設輸入框 (如果人數抽完了)
+          if (!randomMode.value && availableStudentCount.value === 0) {
+            customRandomCount.value = 0;
+          } else if (customRandomCount.value > availableStudentCount.value) {
+            customRandomCount.value = availableStudentCount.value;
           }
         };
 
-        const toggleRepeatDraw = () => {
-          isRepeatingDraw.value = !isRepeatingDraw.value;
-          log(`[ACTION] 切換抽籤模式為: ${isRepeatingDraw.value ? '重複' : '不重複'}`);
+        const toggleRandomMode = () => {
+          randomMode.value = !randomMode.value;
+          log(`[ACTION] 切換抽籤模式為: ${randomMode.value ? '重複' : '不重複'}`);
           // 切換模式時, 清除所有狀態
-          clearDrawState();
+          clearDrawnHistory();
         };
         
-        const clearDrawState = () => {
+        const clearDrawnHistory = () => {
           log(`[ACTION] 清除抽籤狀態`);
-          drawnStudentsSet.clear();
-          justDrawnStudentsSet.clear();
-          randomSelectCount.value = 1;
+          drawnSeats.clear();
+          justDrawnSeats.clear();
+          drawnHistory.value = [];
+          customRandomCount.value = 1;
         };
 
         // === v3.10.2 修正: 移至上方 ===
@@ -1689,7 +1614,7 @@
           const existingNames = new Set(students.value.map(s => s.name));
           
           const names = batchStudentNames.value.split('\n')
-            .map(name => normalizeStudentName(name)) // v3.9 標準化
+            .map(name => normalizeStudentName(name)) // v3.Main 標準化
             .filter(name => name && !existingNames.has(name)); // v3.9 過濾空值與重複
           
           if (names.length === 0) {
@@ -1824,7 +1749,7 @@
             // 重置表單
             Object.assign(newItemData, { reason: '', value: 1, category: 'academic' }); // v3.10 移除 order
           } catch (err) {
-            console.error("[ERROR] 新增評分項失敗:", err);
+            console.error("[ERROR] 新增評分項失败:", err);
             itemError.value = `新增失敗: ${err.message}`;
           } finally {
             isCreatingItem.value = false;
@@ -2034,16 +1959,18 @@
 
         // === v3.21 個人總覽功能 (修正 Bug) ===
         
-        // v3.26.2 修正: 補回遺失的 formatTimestamp 函數
+        // v3.26.1 修正: 補回遺失的 formatTimestamp 函數
         const formatTimestamp = (fbTimestamp) => {
           if (!fbTimestamp) return 'N/A';
           try {
             const d = fbTimestamp.toDate();
-            const m = d.getMonth() + 1;
-            const day = d.getDate();
-            const h = String(d.getHours()).padStart(2, '0');
-            const min = String(d.getMinutes()).padStart(2, '0');
-            return `${m}/${day} ${h}:${min}`;
+            // 格式化為 YYYY/MM/DD HH:mm
+            const Y = d.getFullYear();
+            const M = String(d.getMonth() + 1).padStart(2, '0');
+            const D = String(d.getDate()).padStart(2, '0');
+            const H = String(d.getHours()).padStart(2, '0');
+            const Min = String(d.getMinutes()).padStart(2, '0');
+            return `${Y}/${M}/${D} ${H}:${Min}`;
           } catch (e) {
             console.warn("formatTimestamp 錯誤:", e);
             return 'Invalid Date';
@@ -2077,7 +2004,7 @@
             isFetchingLog.value = false;
           }
         };
-
+        
         const confirmDeleteLog = (logToDelete) => { // v3.21 參數 `log` -> `logToDelete`
           Object.assign(confirmDialog, {
             isOpen: true,
@@ -2152,7 +2079,7 @@
           }
         };
 
-        // v3.21 更新: 共用確認
+        // v3.27: 共用確認
         const executeConfirm = () => {
           const { type, data } = confirmDialog;
           if (type === 'deleteStudent') {
@@ -2164,10 +2091,13 @@
             // submitPoint 內部會自行 close modal & confirm
           } else if (type === 'deleteClass') { 
             executeDeleteClass(data);
-          } else if (type === 'deleteLog') { // v3.20
+          } else if (type === 'deleteLog') { 
             executeDeleteLog(data);
           }
         };
+
+        // === v3.27 隨機抽籤功能 ===
+        // (此區塊已於 v3.27.2 清理時, 移除重複的定義)
 
 
         // === 其他功能 ===
@@ -2226,7 +2156,7 @@
         // === Lifecycle ===
         Vue.onMounted(() => { initFirebase(); });
 
-        // === Expose ===
+        // === Expose (v3.27.1 修正) ===
         return {
           // 狀態
           loading, error, classes, students, currentClassId, currentClass,
@@ -2247,10 +2177,12 @@
           newItemData, categorizedItems, inlineEditItemId, inlineEditItemData,
           // 班級管理
           newClassName, inlineEditClassId, inlineEditClassName,
-          // 抽籤 (v3.24)
-          randomSelectCount, isRepeatingDraw, drawnStudentsSet, justDrawnStudentsSet, availableStudentCount,
+          // 抽籤 (v3.27)
+          customRandomCount, randomMode, drawnHistory, drawnSeats, justDrawnSeats, availableStudentCount,
           // 共用確認
           confirmDialog, 
+          // 個人總覽 (v3.27.1 補回)
+          categorizedLog,
           
           // 核心方法
           toggleStudent, 
@@ -2266,14 +2198,16 @@
           // 班級方法
           createClass, startClassInlineEdit, cancelClassInlineEdit, saveClassEdit,
           confirmDeleteClass, 
-          // 個人總覽方法 (v3.20)
+          // 個人總覽方法 (v3.27.1 補回)
           loadStudentLog, 
           formatTimestamp, confirmDeleteLog,
           // 共用確認方法
           cancelConfirm, executeConfirm, 
           // 其他
           exportCSV, 
-          randomSelect, executeRandomDraw, toggleRepeatDraw, clearDrawState // v3.24
+          // 抽籤方法 (v3.27.1 補回)
+          randomSelect, drawStudents, toggleRandomMode, clearDrawnHistory,
+          getSeatNumberOnly, getSeatCellClass
         };
       }
     });
@@ -2296,6 +2230,3 @@
   </script>
 </body>
 </html>
-
-
-
