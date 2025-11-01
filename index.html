@@ -237,9 +237,10 @@
     }
     
     /* v3.24 (v3.27) 抽籤工具箱: 學生格子 */
+/* v3.24 (v3.27) 抽籤工具箱: 學生格子 */
     .draw-grid {
-      border: 1px solid theme('colors.gray.300');
-      background-color: theme('colors.white');
+      border: 1px solid #d1d5db; /* gray-300 */
+      background-color: #ffffff; /* white */
       padding: 0.5rem;
       border-radius: 0.375rem; /* 6px */
       text-align: center;
@@ -248,14 +249,14 @@
       cursor: default; /* v3.27 */
     }
     .draw-grid.drawn { /* 已抽過 (不重複模式) */
-      background-color: theme('colors.gray.300');
-      color: theme('colors.gray.500');
-      border-color: theme('colors.gray.400');
+      background-color: #d1d5db; /* gray-300 */
+      color: #6b7280; /* gray-500 */
+      border-color: #9ca3af; /* gray-400 */
     }
     .draw-grid.just-drawn { /* 本次抽中 */
-      background-color: theme('colors.blue.500');
-      color: theme('colors.white');
-      border-color: theme('colors.blue.600');
+      background-color: #3b82f6; /* blue-500 */
+      color: #ffffff; /* white */
+      border-color: #2563eb; /* blue-600 */
       transform: scale(1.05);
       font-weight: 700;
     }
@@ -873,13 +874,12 @@
                 </div>
               </div>
 
-              <div class="p-4 border-t bg-gray-50">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2">本次抽中 ({{ justDrawnSeats.length }}人):</h4>
-                <div v-if="justDrawnSeats.length > 0" class="draw-history-item text-blue-800">
-                  {{ justDrawnSeats.join('、') }}
-                </div>
-                <p v-else class="text-xs text-gray-500">尚未抽籤</p>
+      <div class="p-4 border-t bg-gray-50">
                 
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">本次抽中 ({{ justDrawnSeats.size }}人):</h4>
+                <div v-if="justDrawnSeats.size > 0" class="draw-history-item text-blue-800">
+                  {{ Array.from(justDrawnSeats).join('、') }} </div>
+                <p v-else class="text-xs text-gray-500">尚未抽籤</p>
                 <h4 class="text-sm font-semibold text-gray-700 mt-3 mb-2">分組紀錄 ({{ drawnHistory.length }} 組):</h4>
                 <div v-if="drawnHistory.length > 0" class="space-y-2 max-h-32 overflow-y-auto">
                   <div v-for="(group, index) in drawnHistory" :key="index" class="draw-history-item text-gray-800">
@@ -2230,3 +2230,4 @@
   </script>
 </body>
 </html>
+
