@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- v3.26 PWA 正式啟用 -->
-  <title>Dojo 紀錄系統 (v3.26 PWA)</title>
+  <!-- v3.26.2 Refactor: 補回遺失的 formatTimestamp -->
+  <title>Dojo 紀錄系統 (v3.26.2 錯誤修正)</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b82f6">
 
@@ -1466,7 +1466,7 @@
         const executeRandomSelect = () => {
           log(`[ACTION] 執行抽籤: ${randomSelectCount.value} 人`);
           const count = Number(randomSelectCount.value);
-          if (count <= 0 || count > students.value.length) {
+          if (count <= 0 || count > students.length) {
             log(`[WARN] 抽籤人數不合法: ${count}`);
             return;
           }
@@ -1867,6 +1867,23 @@
         };
 
         // === v3.21 個人總覽功能 (修正 Bug) ===
+        
+        // v3.26.2 修正: 補回遺失的 formatTimestamp 函數
+        const formatTimestamp = (fbTimestamp) => {
+          if (!fbTimestamp) return 'N/A';
+          try {
+            const d = fbTimestamp.toDate();
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            const h = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${m}/${day} ${h}:${min}`;
+          } catch (e) {
+            console.warn("formatTimestamp 錯誤:", e);
+            return 'Invalid Date';
+          }
+        };
+
         // v3.21: 載入學生個人紀錄
         const loadStudentLog = (studentId) => {
           log(`[ACTION] 載入學生 ${studentId} 的個人紀錄...`);
@@ -2070,7 +2087,7 @@
           confirmDialog, 
           
           // 核心方法
-          toggleStudent, // v3.22.1 修正: 加回遺失的
+          toggleStudent, 
           toggleSelectAll, openModal, closeModal, switchClass,
           // 評分方法
           confirmSubmitPoint, 
@@ -2113,4 +2130,3 @@
   </script>
 </body>
 </html>
-
