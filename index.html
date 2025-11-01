@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- v3.24 升級: 獨立抽籤工具箱 -->
-  <title>Dojo 紀錄系統 (v3.24 抽籤工具箱)</title>
+  <!-- v3.24.1 修正: 補回遺失的 JS 程式碼 -->
+  <title>Dojo 紀錄系統 (v3.24.1 抽籤修正)</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b82f6">
 
@@ -1238,6 +1238,14 @@
             }
           }
           // v3.21 依照時間戳排序 (新到舊)
+          // v3.24.1 修正: 補回遺失的程式碼
+          const sortByTimestamp = (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
+          academic.sort(sortByTimestamp);
+          behavior.sort(sortByTimestamp);
+          
+          return { academic, behavior };
+        }); // <-- v3.24.1 修正: 補回遺失的 '});'
+
         // v3.24: 抽籤可用人數
         const availableStudentCount = Vue.computed(() => {
           if (isRepeatingDraw.value) {
@@ -2288,5 +2296,6 @@
   </script>
 </body>
 </html>
+
 
 
