@@ -1700,7 +1700,11 @@
             isBatchAddingStudent.value = false;
           }
         };
-            
+
+        const startInlineEdit = (student) => {
+          inlineEditStudentId.value = student.id;
+          inlineEditStudentName.value = student.name;
+        };
             
         const cancelInlineEdit = () => {
           inlineEditStudentId.value = null;
