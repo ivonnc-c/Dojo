@@ -454,6 +454,18 @@
                 </li>
               </ul>
               <p v-else class="text-gray-500">尚無任何班級。</p>
+            <div class="mt-8 pt-6 border-t border-red-300">
+                <h3 class="text-lg font-bold text-red-700 mb-2">危險區域</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                  此操作將會刪除「目前選取的班級」本身，以及該班級的**所有**學生資料與**所有**歷史紀錄 (pointLog)。此為永久性操作，無法復原。
+                </p>
+                <button @click="confirmDeleteEverything"
+                        :disabled="!currentClassId || isAnyLoading || inlineEditClassId !== null"
+                        class="w-full bg-red-600 text-white px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700">
+                  刪除目前班級 ({{ currentClass?.name || 'N/A' }}) 的所有資料
+                </button>
+                <p v-if="!currentClassId" class="text-red-500 text-xs mt-1">請先在主畫面選擇一個班級才能執行此操作。</p>
+              </div>
             </div>
             
             <div v-if="modal.view === 'scoreStudent'">
@@ -915,16 +927,26 @@
       </div>
     </transition>
 
-    <div v-if="confirmDialog.isOpen" class="confirm-dialog-backdrop">
+<div v-if="confirmDialog.isOpen" class="confirm-dialog-backdrop">
         <div class="confirm-dialog">
             <h3 class="text-lg font-bold mb-3 text-gray-800">{{ confirmDialog.title }}</h3>
             <p class="text-gray-600 mb-5 whitespace-pre-wrap">{{ confirmDialog.message }}</p>
+
+            <div v-if="confirmDialog.needsInput" class="mb-4 text-left">
+              <p class="text-sm text-gray-700 mb-2">
+                請輸入 <code class="font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded">{{ confirmDialog.confirmationText }}</code> 來確認刪除：
+              </p>
+              <input type="text" v-model="confirmDialog.inputText"
+                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm">
+            </div>
+
             <div class="flex justify-end space-x-3">
                 <button @click="cancelConfirm" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-medium hover:bg-gray-300 transition-colors">
                     {{ confirmDialog.cancelText }}
                 </button>
                 <button @click="executeConfirm" 
-                        class="px-4 py-2 rounded-md font-medium transition-colors"
+                        :disabled="confirmDialog.needsInput && confirmDialog.inputText !== confirmDialog.confirmationText"
+                        class="px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="confirmDialog.confirmColorClass">
                     {{ confirmDialog.confirmText }}
                 </button>
@@ -1049,7 +1071,7 @@
         const drawnSeats = Vue.reactive(new Set()); // 不重複模式下, 已抽過的 (灰色)
         const justDrawnSeats = Vue.reactive(new Set()); // 本次抽中的 (藍色)
 
-        // 共用確認對話框
+     // 共用確認對話框
         const confirmDialog = Vue.reactive({ 
             isOpen: false,
             title: '',
@@ -1058,7 +1080,11 @@
             data: null, 
             confirmText: '確認',
             cancelText: '取消',
-            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white'
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white',
+            // v3.28 新增 (一鍵刪除用)
+            needsInput: false,
+            confirmationText: '',
+            inputText: ''
         });
         
         let unSubClasses = null;
@@ -1586,10 +1612,14 @@
           customRandomCount.value = 1;
         };
 
-        // === v3.10.2 修正: 移至上方 ===
+       // === v3.10.2 修正: 移至上方 === (v3.28 升級)
         const cancelConfirm = () => { 
            confirmDialog.isOpen = false;
            confirmDialog.data = null;
+           // v3.28 新增
+           confirmDialog.needsInput = false;
+           confirmDialog.confirmationText = '';
+           confirmDialog.inputText = '';
         };
 
         // === 管理學生功能 (v3.9) ===
@@ -2085,7 +2115,7 @@
           }
         };
 
-        // v3.27: 共用確認
+       // v3.27: 共用確認 (v3.28 升級)
         const executeConfirm = () => {
           const { type, data } = confirmDialog;
           if (type === 'deleteStudent') {
@@ -2099,6 +2129,77 @@
             executeDeleteClass(data);
           } else if (type === 'deleteLog') { 
             executeDeleteLog(data);
+          } else if (type === 'deleteAll') { // v3.28 新增
+            executeDeleteEverything(data.classId, data.className);
+          }
+        };
+
+        // v3.28 新增: 一鍵刪除 (確認)
+        const confirmDeleteEverything = () => {
+          if (!currentClass.value) {
+            alert("請先在主畫面選擇一個班級。");
+            return; 
+          }
+          const className = currentClass.value.name;
+          const classId = currentClass.value.id;
+          
+          Object.assign(confirmDialog, {
+            isOpen: true,
+            title: '⚠️ 永久刪除所有資料 ⚠️',
+            message: `此操作將永久刪除「${className}」班級，以及其所有的學生和評分紀錄。\n\n資料將無法復原。`,
+            type: 'deleteAll',
+            data: { classId, className },
+            confirmText: '我了解後果，確認刪除',
+            cancelText: '取消',
+            confirmColorClass: 'bg-red-600 hover:bg-red-700 text-white',
+            needsInput: true,
+            confirmationText: className, // 要求輸入班級名稱
+            inputText: ''
+          });
+        };
+
+        // v3.28 新增: 一鍵刪除 (執行)
+        const executeDeleteEverything = async (classId, className) => {
+          if (isDeletingClass.value) return;
+          isDeletingClass.value = true;
+          deletingClassId.value = classId;
+          log(`[ACTION] 準備永久刪除班級 ${className} (${classId}) 的所有資料...`);
+
+          try {
+            const batch = writeBatch(db);
+            
+            // 1. 查詢該班級所有學生
+            const sQuery = query(collection(db, "students"), where("classId", "==", classId));
+            // 2. 查詢該班級所有紀錄
+            const lQuery = query(collection(db, "pointLog"), where("classId", "==", classId));
+
+            const [sSnap, lSnap] = await Promise.all([
+              getDocs(sQuery),
+              getDocs(lQuery)
+            ]);
+
+            log(`[DELETE] 找到 ${sSnap.size} 位學生, ${lSnap.size} 筆紀錄...`);
+
+            // 3. 將所有學生加入刪除
+            sSnap.forEach(doc => batch.delete(doc.ref));
+            // 4. 將所有紀錄加入刪除
+            lSnap.forEach(doc => batch.delete(doc.ref));
+            // 5. 將班級本身加入刪除
+            batch.delete(doc(db, "classes", classId));
+
+            await batch.commit();
+
+            log(`[SUCCESS] 班級 ${className} 的所有資料已永久刪除。`);
+            cancelConfirm(); // 關閉確認視窗
+            // onSnapshot 會自動處理 currentClassId 的切換
+            
+          } catch (err) {
+            console.error("[ERROR] 永久刪除失敗:", err);
+            classError.value = `刪除失敗: ${err.message}`; // 顯示錯誤在 modal
+            cancelConfirm(); // 關閉確認視窗
+          } finally {
+            isDeletingClass.value = false;
+            deletingClassId.value = null;
           }
         };
 
@@ -2209,6 +2310,7 @@
           formatTimestamp, confirmDeleteLog,
           // 共用確認方法
           cancelConfirm, executeConfirm, 
+          confirmDeleteEverything, //
           // 其他
           exportCSV, 
           // 抽籤方法 (v3.27.1 補回)
@@ -2236,5 +2338,6 @@
   </script>
 </body>
 </html>
+
 
 
