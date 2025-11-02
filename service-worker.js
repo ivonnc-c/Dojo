@@ -1,7 +1,7 @@
 // v3.24 Service Worker
 // 這個檔案負責快取 App 核心資源, 讓我們可以離線使用
 
-const CACHE_NAME = 'dojo-system-cache-v1';
+const CACHE_NAME = 'pinxue-plus-cache-v1';
 // v3.24: 我們只需要快取 Vue, Tailwind 和 HTML 檔案本身
 // v3.25: 將 ./dojo_system_v3_5.html 改為 index.html (假設主檔案會是 index.html)
 const URLS_TO_CACHE = [
@@ -114,4 +114,5 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
 
