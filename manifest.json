@@ -8,15 +8,16 @@
   "description": "Dojo 優缺點紀錄系統 (家禎老師)",
   "icons": [
     {
-      "src": "https://placehold.co/192x192/3b82f6/FFFFFF?text=Dojo",
+      "src": "icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://placehold.co/512x512/3b82f6/FFFFFF?text=Dojo",
+      "src": "icon-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ]
 }
+
 
