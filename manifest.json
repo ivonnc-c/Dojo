@@ -1,11 +1,11 @@
 {
-  "name": "Dojo 紀錄系統",
-  "short_name": "Dojo",
+  "name": "品學+ 紀錄系統",
+  "short_name": "品學+",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f4f7f6",
   "theme_color": "#3b82f6",
-  "description": "Dojo 優缺點紀錄系統 (家禎老師)",
+  "description": "品學+ 雙軌紀錄系統 (家禎老師)",
   "icons": [
     {
       "src": "icon-192.png",
@@ -19,5 +19,4 @@
     }
   ]
 }
-
 
