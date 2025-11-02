@@ -1701,22 +1701,7 @@
           }
         };
             
-            await batch.commit();
-            log(`[SUCCESS] 成功批次新增 ${names.length} 位學生`);
-            batchStudentNames.value = ''; // 清空輸入框
-          } catch (err) {
-            console.error("[ERROR] 批次新增學生失敗:", err);
-            addStudentError.value = `新增失敗: ${err.message}`;
-          } finally {
-            isBatchAddingStudent.value = false;
-          }
-        };
-
-        const startInlineEdit = (student) => {
-          inlineEditStudentId.value = student.id;
-          inlineEditStudentName.value = student.name;
-        };
-
+            
         const cancelInlineEdit = () => {
           inlineEditStudentId.value = null;
           inlineEditStudentName.value = '';
@@ -2490,6 +2475,7 @@
   </script>
 </body>
 </html>
+
 
 
 
